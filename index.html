@@ -1,0 +1,2456 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="NOOBR™ Weather — موقع طقس حي بأخبار مباشرة">
+<title>NOOBR™ Weather</title>
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+<link rel="preconnect" href="https://api.open-meteo.com">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+  html, body { min-height:100%; overflow-x:hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
+    color:#fff; min-height:100vh; position:relative; overflow-x:hidden;
+    --accent: #38bdf8; --accent2: #a855f7;
+    --glass: rgba(15,23,42,0.55);
+    --glass-border: rgba(255,255,255,0.16);
+    --text-dim: rgba(255,255,255,0.7);
+    --card-bg: rgba(15,23,42,0.5);
+    line-height: 1.5;
+  }
+  body.light-mode {
+    color:#0f172a;
+    --glass: rgba(255,255,255,0.8);
+    --glass-border: rgba(0,0,0,0.08);
+    --text-dim: rgba(0,0,0,0.65);
+    --card-bg: rgba(255,255,255,0.75);
+  }
+
+  .ico { display:inline-block; width:1em; height:1em; vertical-align:-0.15em; fill:none;
+    stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .ico-lg { width:1.4em; height:1.4em; }
+  .ico-sm { width:0.85em; height:0.85em; }
+  .ico-fill { fill:currentColor; stroke:currentColor; }
+
+  .sky-grad { position:fixed; inset:0; z-index:-6; transition:background 2.5s ease;
+    background: linear-gradient(180deg,#0f172a,#1e293b); }
+  .sky-grad.clear-day    { background: linear-gradient(180deg,#0284c7,#0ea5e9 30%,#38bdf8 60%,#fcd34d); }
+  .sky-grad.clear-sunset { background: linear-gradient(180deg,#4c1d95,#be185d 35%,#f97316 70%,#fbbf24); }
+  .sky-grad.clear-night  { background: linear-gradient(180deg,#020617,#0c1445 50%,#1e1b4b); }
+  .sky-grad.cloudy       { background: linear-gradient(180deg,#1e293b,#475569 50%,#94a3b8); }
+  .sky-grad.rain         { background: linear-gradient(180deg,#0f172a,#1e293b 50%,#334155); }
+  .sky-grad.thunder      { background: linear-gradient(180deg,#000,#0a0a1a 50%,#1f1f3a); }
+  .sky-grad.snow         { background: linear-gradient(180deg,#334155,#94a3b8 50%,#e2e8f0); }
+  .sky-grad.fog          { background: linear-gradient(180deg,#6b7280,#9ca3af 50%,#d1d5db); }
+  .sky-grad.aurora       { background: linear-gradient(180deg,#020617,#0c4a6e 40%,#065f46 70%,#020617); }
+
+  .bg-photo { position:fixed; inset:0; z-index:-5; background-size:cover; background-position:center;
+    background-repeat:no-repeat; transition:opacity 1.2s ease; opacity:0; will-change:opacity, transform; }
+  .bg-photo.active { opacity:1; }
+  .bg-photo.kenburns { animation: kenBurns 30s ease-in-out infinite alternate; }
+  @keyframes kenBurns { 0%{transform:scale(1);} 100%{transform:scale(1.12);} }
+  .bg-overlay { position:fixed; inset:0; z-index:-4;
+    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.6) 100%);
+    transition: background .8s ease; }
+  body.light-mode .bg-overlay { background: linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.55)); }
+
+  #layers { position:fixed; inset:0; z-index:-3; pointer-events:none; overflow:hidden; contain:strict; }
+  .layer { position:absolute; inset:0; will-change: transform; }
+
+  .drop { position:absolute; top:-20px; width:2px;
+    background: linear-gradient(transparent, rgba(180,220,255,0.9));
+    animation: fall linear infinite; will-change: transform; }
+  @keyframes fall { to { transform: translate3d(0, 105vh, 0); } }
+
+  .flake { position:absolute; top:-20px; color:#fff; font-size:14px;
+    animation: fallSnow linear infinite; will-change: transform; }
+  @keyframes fallSnow { to { transform: translate3d(0, 105vh, 0) rotate(360deg); } }
+
+  .star { position:absolute; background:#fff; border-radius:50%; animation: twinkle ease-in-out infinite; }
+  @keyframes twinkle { 0%,100%{opacity:0.15;} 50%{opacity:1;} }
+
+  .cloud { position:absolute;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.5), transparent 70%);
+    border-radius:50%; filter: blur(20px); animation: drift linear infinite; will-change: transform; }
+  @keyframes drift {
+    from { transform: translate3d(-350px,0,0); }
+    to   { transform: translate3d(calc(100vw + 350px),0,0); }
+  }
+
+  .fog-layer { position:absolute; inset:0;
+    background: linear-gradient(180deg, transparent, rgba(255,255,255,0.3) 50%, transparent);
+    animation: fogMove 25s linear infinite; }
+  @keyframes fogMove { from{transform:translate3d(-10%,0,0);} to{transform:translate3d(10%,0,0);} }
+
+  .sun-rays { position:absolute; top:-30%; left:50%; width:600px; height:600px;
+    transform: translate3d(-50%,0,0);
+    background: radial-gradient(circle, rgba(255,220,100,0.35), transparent 55%);
+    animation: pulseSun 6s ease-in-out infinite; border-radius:50%;
+    will-change: transform, opacity; }
+  @keyframes pulseSun {
+    0%,100% { opacity:0.6; transform: translate3d(-50%,0,0) scale(1); }
+    50%     { opacity:1;   transform: translate3d(-50%,0,0) scale(1.1); }
+  }
+
+  .lightning { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+  .lightning.flash { animation: lightningFlash .4s ease-out; }
+  @keyframes lightningFlash {
+    0%{opacity:0;} 8%{opacity:1;} 16%{opacity:0;}
+    24%{opacity:0.7;} 32%{opacity:0;} 100%{opacity:0;}
+  }
+
+  .firefly { position:absolute; width:3px; height:3px;
+    background: radial-gradient(circle, #fde047, rgba(253,224,71,0));
+    border-radius:50%; box-shadow: 0 0 10px #fde047;
+    animation: float 14s ease-in-out infinite; will-change: transform; }
+  @keyframes float {
+    0%,100%{transform:translate3d(0,0,0);opacity:0.2;}
+    25%{transform:translate3d(50px,-60px,0);opacity:1;}
+    50%{transform:translate3d(-30px,-100px,0);opacity:0.5;}
+    75%{transform:translate3d(-60px,-30px,0);opacity:1;}
+  }
+
+  .container { max-width:1000px; margin:0 auto; padding:12px 12px 140px; position:relative; z-index:1; }
+
+  .header { position:sticky; top:8px; background:var(--glass);
+    backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid var(--glass-border); border-radius:18px; padding:8px 10px;
+    margin-bottom:16px; display:flex; align-items:center; gap:8px;
+    box-shadow: 0 6px 30px rgba(0,0,0,0.35); z-index:50; transition: all .3s; }
+
+  .brand { display:flex; align-items:center; gap:6px; font-weight:700; font-size:14px;
+    padding:6px 10px; border-radius:12px; background: rgba(255,255,255,0.08);
+    white-space:nowrap; flex-shrink:0; }
+  .brand .logo { width:22px; height:22px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius:7px; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .brand .logo svg { width:14px; height:14px; }
+  .brand sup { font-size:8px; opacity:0.7; }
+
+  .search-wrap { flex:1; display:flex; align-items:center; gap:6px; min-width:0; }
+  .search-wrap input { flex:1; background:transparent; border:none; outline:none; color:inherit;
+    font-size:15px; padding:10px 6px; min-width:0; -webkit-appearance:none; }
+  .search-wrap input::placeholder { color: var(--text-dim); }
+
+  .btn { background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border:none; color:#fff; padding:10px 14px; border-radius:12px;
+    font-weight:600; cursor:pointer; transition: transform .2s, box-shadow .2s;
+    font-size:14px; white-space:nowrap; display:inline-flex; align-items:center; gap:5px;
+    font-family: inherit; touch-action: manipulation; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+  .btn.ghost { background: rgba(255,255,255,0.1); color: inherit; border: 1px solid var(--glass-border); }
+  body.light-mode .btn.ghost { background: rgba(0,0,0,0.06); }
+  .btn.icon { padding:10px 12px; min-width:42px; justify-content:center; }
+
+  .news-ticker { background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(168,85,247,0.2));
+    border: 1px solid rgba(56,189,248,0.35); border-radius:14px; padding:10px 0; margin-bottom:16px;
+    overflow:hidden; position:relative; display:flex; align-items:center;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+  .news-ticker .ticker-label { flex-shrink:0; padding:0 14px; font-size:12px; font-weight:700;
+    display:flex; align-items:center; gap:6px; border-left:1px solid rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.15); align-self:stretch; white-space:nowrap; z-index:2; }
+  .news-ticker .ticker-label .dot { width:8px; height:8px; background:#ef4444; border-radius:50%;
+    animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink {
+    0%,100%{opacity:1; box-shadow: 0 0 8px #ef4444;}
+    50%{opacity:0.3; box-shadow: 0 0 0 #ef4444;}
+  }
+  .news-ticker .ticker-track-wrap { flex:1; overflow:hidden; position:relative; height:22px; }
+  .news-ticker .ticker-track { display:inline-flex; gap:40px; white-space:nowrap;
+    animation: tickerMove linear infinite; will-change: transform;
+    position:absolute; top:50%; transform: translateY(-50%); right:0; }
+  @keyframes tickerMove {
+    0%   { transform: translateY(-50%) translateX(0); }
+    100% { transform: translateY(-50%) translateX(-100%); }
+  }
+  .news-ticker .ticker-item { display:inline-flex; align-items:center; gap:6px; font-size:13px;
+    color:inherit; text-decoration:none; transition: opacity .2s; cursor:pointer; }
+  .news-ticker .ticker-item:hover { opacity:0.75; }
+  .news-ticker .ticker-item .sep { opacity:0.4; margin:0 4px; }
+  .news-ticker .ticker-loading { font-size:12px; color: var(--text-dim); padding:0 16px; }
+
+  .news-tools { display:flex; gap:8px; align-items:center; margin-bottom:12px; padding:0 4px; flex-wrap:wrap; }
+  .news-tools input { flex:1; min-width:120px; background:var(--glass);
+    border:1px solid var(--glass-border); border-radius:10px; padding:8px 12px;
+    color:inherit; font-size:13px; font-family:inherit; outline:none; }
+  .news-tools input::placeholder { color: var(--text-dim); }
+  .news-tools button { background: var(--glass); border: 1px solid var(--glass-border);
+    color: inherit; padding: 8px 12px; border-radius:10px; cursor:pointer; font-size:13px;
+    font-family: inherit; display:flex; align-items:center; gap:5px; transition: all .2s; }
+  .news-tools button:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+  .news-tools button.active { background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color:#fff; border-color:transparent; }
+
+  .card { background: var(--card-bg);
+    backdrop-filter: blur(18px) saturate(180%); -webkit-backdrop-filter: blur(18px) saturate(180%);
+    border: 1px solid var(--glass-border); border-radius:22px; padding:22px; margin-bottom:14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35); animation: cardIn .5s ease backwards;
+    position:relative; overflow:hidden; }
+  @keyframes cardIn { from{opacity:0; transform: translateY(15px);} to{opacity:1; transform: translateY(0);} }
+
+  .hero { text-align:center; }
+  .loc-name { font-size:22px; font-weight:600; display:flex; align-items:center; gap:8px;
+    justify-content:center; margin-bottom:4px; flex-wrap:wrap; word-break:break-word; }
+  .loc-name svg { vertical-align:middle; }
+  .loc-time { font-size:12px; color: var(--text-dim); margin-bottom:12px; font-variant-numeric: tabular-nums; }
+
+  .we-icon { width:120px; height:120px; display:inline-block; animation: floatIcon 5s ease-in-out infinite; }
+  @keyframes floatIcon {
+    0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-8px); }
+  }
+  .we-icon svg { width:100%; height:100%; stroke-width:1.5; }
+
+  .temp-main { font-size:88px; font-weight:200; line-height:1; letter-spacing:-5px; margin:4px 0;
+    background: linear-gradient(180deg, #fff, #cbd5e1);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    font-variant-numeric: tabular-nums; }
+  body.light-mode .temp-main { background: linear-gradient(180deg, #0f172a, #475569);
+    -webkit-background-clip: text; background-clip: text; }
+  .temp-main sup { font-size:32px; letter-spacing:0; vertical-align: super; }
+  .desc-main { font-size:19px; margin-top:4px; font-weight:500; }
+  .feels-main { font-size:13px; color: var(--text-dim); margin-top:6px; }
+  .hero-actions { justify-content:center; margin-top:14px; display:flex; gap:6px; flex-wrap:wrap; }
+
+  .grid-stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+    gap:8px; margin-top:18px; }
+  .stat { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+    border-radius:14px; padding:12px 8px; text-align:center; transition: all .25s;
+    cursor:pointer; touch-action: manipulation; }
+  .stat:hover, .stat:active { transform: translateY(-3px); background: rgba(255,255,255,0.14);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  body.light-mode .stat { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
+  .stat .label { font-size:11px; color: var(--text-dim); margin-bottom:4px;
+    display:flex; align-items:center; justify-content:center; gap:4px; }
+  .stat .value { font-size:16px; font-weight:600; font-variant-numeric: tabular-nums; }
+  .stat .sub { font-size:10px; color: var(--text-dim); margin-top:2px; }
+
+  .chart-wrap { margin-top:8px; height:130px; position:relative; }
+  .chart-wrap svg { width:100%; height:100%; display:block; }
+  .chart-labels { display:flex; justify-content:space-between; font-size:10px;
+    color: var(--text-dim); margin-top:4px; font-variant-numeric: tabular-nums; }
+  .chart-labels span { display:flex; align-items:center; gap:3px; }
+
+  .hourly { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; scrollbar-width: thin;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+  .hourly::-webkit-scrollbar { height:4px; }
+  .hourly::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 50%, transparent); border-radius:2px; }
+  .hour-card { flex:0 0 72px; background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1); border-radius:14px; padding:12px 6px;
+    text-align:center; scroll-snap-align: start; transition: all .25s; }
+  .hour-card:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+  body.light-mode .hour-card { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
+  .hour-card .h { font-size:10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .hour-card .ic-wrap { width:32px; height:32px; margin:6px auto; color:#fff; }
+  body.light-mode .hour-card .ic-wrap { color:#0f172a; }
+  .hour-card .ic-wrap svg { width:100%; height:100%; stroke-width:2; }
+  .hour-card .t { font-size:14px; font-weight:600; }
+
+  .forecast { display:grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap:8px; }
+  .day { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius:14px; padding:12px 6px; text-align:center; transition: all .25s; touch-action: manipulation; }
+  .day:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); transform: translateY(-3px); }
+  body.light-mode .day { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
+  .day .name { font-size:11px; color: var(--text-dim); margin-bottom:6px; font-weight:500; }
+  .day .ic-wrap { width:38px; height:38px; margin:4px auto; }
+  .day .ic-wrap svg { width:100%; height:100%; stroke-width:2; }
+  .day .hi { font-size:15px; font-weight:600; }
+  .day .lo { font-size:11px; color: var(--text-dim); margin-top:2px; }
+  .day .bar { height:3px; border-radius:2px; margin: 6px 10px 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity:0.8; }
+
+  .favs { display:flex; flex-wrap:wrap; gap:6px; }
+  .fav-chip { display:inline-flex; align-items:center; gap:5px; background: rgba(255,255,255,0.1);
+    border: 1px solid var(--glass-border); border-radius:20px; padding:7px 12px; font-size:12px;
+    cursor:pointer; transition: all .2s; touch-action: manipulation; }
+  .fav-chip:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .fav-chip .x { opacity:0.6; padding:0 3px; display:flex; }
+  .fav-chip .x:hover { opacity:1; color:#ef4444; }
+
+  .compare-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap:10px; margin-top:10px; }
+  .compare-card { background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border);
+    border-radius:14px; padding:14px 10px; text-align:center; position:relative; }
+  body.light-mode .compare-card { background: rgba(0,0,0,0.04); }
+  .compare-card .cc-name { font-size:13px; font-weight:600; margin-bottom:6px; word-break:break-word;
+    display:flex; align-items:center; justify-content:center; gap:4px; }
+  .compare-card .cc-icon { width:44px; height:44px; margin:4px auto; }
+  .compare-card .cc-icon svg { width:100%; height:100%; stroke-width:2; }
+  .compare-card .cc-temp { font-size:22px; font-weight:700; margin:4px 0; }
+  .compare-card .cc-desc { font-size:11px; opacity:0.7; }
+  .compare-card .cc-remove { position:absolute; top:6px; left:6px; width:22px; height:22px;
+    border-radius:50%; background: rgba(239,68,68,0.7); color:#fff; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-family:inherit; }
+  .compare-card .cc-remove:hover { background:#ef4444; }
+
+  .map-wrap { border-radius:16px; overflow:hidden; border: 1px solid var(--glass-border); height:280px; position:relative; }
+  .map-wrap iframe { width:100%; height:100%; border:0; }
+
+  .info-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .info-row { display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+    background: rgba(255,255,255,0.05); border-radius:10px; font-size:13px; transition: background .2s; }
+  body.light-mode .info-row { background: rgba(0,0,0,0.03); }
+  .info-row:hover { background: rgba(255,255,255,0.1); }
+  .info-row .ir-label { display:flex; align-items:center; gap:8px; color: var(--text-dim); }
+  .info-row .ir-value { font-weight:600; font-variant-numeric: tabular-nums; display:flex; align-items:center; gap:4px; }
+
+  .saved-news-item { display:flex; align-items:flex-start; gap:8px; padding:10px 12px;
+    background: rgba(255,255,255,0.05); border-radius:10px; margin-bottom:6px; font-size:13px; transition: background .2s; }
+  body.light-mode .saved-news-item { background: rgba(0,0,0,0.03); }
+  .saved-news-item:hover { background: rgba(255,255,255,0.1); }
+  .saved-news-item a { color:inherit; text-decoration:none; flex:1; }
+  .saved-news-item a:hover { text-decoration: underline; }
+  .saved-news-item .remove { background: transparent; border:none; color:inherit; cursor:pointer;
+    opacity:0.5; padding:2px; display:flex; align-items:center; }
+  .saved-news-item .remove:hover { opacity:1; color:#ef4444; }
+
+  .news-list-item { display:flex; align-items:flex-start; gap:10px; padding:12px 14px;
+    background: rgba(255,255,255,0.05); border-radius:12px; margin-bottom:8px; font-size:13px; transition: all .2s; }
+  body.light-mode .news-list-item { background: rgba(0,0,0,0.03); }
+  .news-list-item:hover { background: rgba(255,255,255,0.1); }
+  .news-list-item a { color:inherit; text-decoration:none; flex:1; line-height:1.6; }
+  .news-list-item a:hover { color: var(--accent); }
+  .news-list-item .save-btn { background: transparent; border:none; color:inherit; cursor:pointer;
+    opacity:0.5; padding:4px; display:flex; align-items:center; transition: all .2s; flex-shrink:0; }
+  .news-list-item .save-btn:hover { opacity:1; color: var(--accent); transform: scale(1.15); }
+  .news-list-item .save-btn.saved { opacity:1; color:#fbbf24; }
+  .news-list-item .src-tag { font-size:10px; padding:2px 8px;
+    background: color-mix(in srgb, var(--accent) 25%, transparent); border-radius:10px;
+    opacity:0.9; white-space:nowrap; align-self:center; }
+  .news-list-item .urgent { color:#fca5a5; font-weight:700; }
+
+  .fact-card { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--accent2) 20%, transparent));
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius:18px; padding:18px; display:flex; align-items:flex-start; gap:12px;
+    animation: fadeIn .6s ease; }
+  @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+  .fact-card .fact-icon { flex-shrink:0; color:#fbbf24; width:30px; height:30px; }
+  .fact-card .fact-icon svg { width:100%; height:100%; stroke-width:2; }
+  .fact-card .fact-text { font-size:14px; line-height:1.7; }
+  .fact-card .fact-label { font-size:11px; opacity:0.7; margin-bottom:4px; letter-spacing:1px; }
+
+  .sound-panel { position:fixed; bottom: max(16px, env(safe-area-inset-bottom)); left:16px;
+    background: var(--glass); backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid var(--glass-border); border-radius:60px; padding:6px 12px 6px 6px;
+    display:flex; align-items:center; gap:10px; z-index:100;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4); transition: transform .3s; }
+  .sound-panel:hover { transform: translateY(-2px); }
+
+  .play-btn { width:42px; height:42px; border-radius:50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition: transform .2s; touch-action: manipulation; font-family: inherit; }
+  .play-btn svg { width:20px; height:20px; }
+  .play-btn:hover { transform: scale(1.08); }
+  .play-btn.playing { animation: pulseSound 2s ease-in-out infinite; }
+  @keyframes pulseSound {
+    0%,100% { box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 50%, transparent); }
+    50%     { box-shadow: 0 4px 28px color-mix(in srgb, var(--accent) 90%, transparent); }
+  }
+  .sound-panel input[type=range] { width:70px; accent-color: var(--accent); cursor:pointer; }
+  .sound-info { font-size:10px; color: var(--text-dim); max-width:80px; line-height:1.2; text-align:center; }
+
+  .mode-toggle { position:fixed; bottom: max(16px, env(safe-area-inset-bottom)); right:16px;
+    width:48px; height:48px; border-radius:50%; background: var(--glass);
+    backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid var(--glass-border); color:inherit; cursor:pointer; z-index:100;
+    transition: transform .3s; font-family: inherit; touch-action: manipulation;
+    display:flex; align-items:center; justify-content:center; }
+  .mode-toggle svg { width:22px; height:22px; }
+  .mode-toggle:hover { transform: scale(1.1) rotate(20deg); }
+
+  .about-btn { position:fixed; top:50%; right:0; transform: translateY(-50%);
+    writing-mode: vertical-rl; text-orientation: mixed;
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    color:#fff; border:none; padding:16px 8px; border-radius:12px 0 0 12px;
+    font-size:12px; font-weight:700; letter-spacing:1px; cursor:pointer; z-index:99;
+    box-shadow: -4px 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
+    transition: all .3s; font-family: inherit; touch-action: manipulation; }
+  .about-btn:hover { padding: 16px 12px; letter-spacing: 2px; }
+
+  .overlay { position:fixed; inset:0; background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    z-index:300; opacity:0; pointer-events:none; transition: opacity .3s ease; }
+  .overlay.open { opacity:1; pointer-events:auto; }
+
+  .drawer { position:fixed; top:0; right:-100%; width:100%; max-width:400px; height:100%;
+    z-index:301; background: linear-gradient(180deg, #0f172a, #1e293b);
+    border-left: 1px solid rgba(255,255,255,0.1);
+    box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+    transition: right .4s cubic-bezier(.4,0,.2,1); color:#fff;
+    display:flex; flex-direction:column; overflow-y:auto; -webkit-overflow-scrolling: touch; }
+  body.light-mode .drawer { background: linear-gradient(180deg, #f8fafc, #e2e8f0); color:#0f172a; }
+  .drawer.open { right:0; }
+
+  .drawer-header { padding:18px 20px 14px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.1); position:sticky; top:0; background: inherit; z-index:2; }
+  body.light-mode .drawer-header { border-color: rgba(0,0,0,0.1); }
+  .drawer-header h2 { font-size:18px; display:flex; align-items:center; gap:8px; }
+  .drawer-close { width:32px; height:32px; border-radius:50%; background: rgba(255,255,255,0.1);
+    border:none; color:inherit; cursor:pointer; transition: all .2s; font-family: inherit;
+    display:flex; align-items:center; justify-content:center; }
+  .drawer-close svg { width:16px; height:16px; }
+  .drawer-close:hover { background: rgba(239,68,68,0.3); transform: rotate(90deg); }
+
+  .drawer-body { padding:20px; flex:1; }
+
+  .dev-card { background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(168,85,247,0.15));
+    border: 1px solid rgba(56,189,248,0.3); border-radius:18px; padding:20px; text-align:center; margin-bottom:18px; }
+  .dev-avatar { width:80px; height:80px; background: linear-gradient(135deg, #38bdf8, #a855f7);
+    border-radius:22px; display:flex; align-items:center; justify-content:center;
+    font-size:36px; font-weight:900; margin:0 auto 12px;
+    box-shadow: 0 12px 30px rgba(56,189,248,0.5); letter-spacing:-2px; }
+  .dev-name { font-size:22px; font-weight:900; letter-spacing:1px; margin-bottom:4px;
+    background: linear-gradient(135deg, #38bdf8, #a855f7);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .dev-name sup { font-size:11px; }
+  .dev-role { font-size:12px; opacity:0.75; margin-bottom:14px; }
+
+  .dev-desc { font-size:13px; line-height:1.8; opacity:0.9; margin:16px 0; padding:14px;
+    background: rgba(255,255,255,0.05); border-radius:14px;
+    border-right: 3px solid #38bdf8; text-align:right; }
+
+  .feature-badges { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; }
+  .badge { background: linear-gradient(135deg, rgba(56,189,248,0.25), rgba(168,85,247,0.25));
+    border: 1px solid rgba(56,189,248,0.4); border-radius:20px; padding:5px 10px;
+    font-size:10px; font-weight:600; }
+
+  .contact-item { display:flex; align-items:center; gap:10px; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12); border-radius:12px; padding:12px 14px;
+    text-decoration:none; color:inherit; transition: all .25s; font-size:13px; margin-top:10px; }
+  .contact-item:hover { background: rgba(56,189,248,0.2); border-color:#38bdf8; transform: translateX(-4px); }
+  .contact-item .ci-icon { width:36px; height:36px; background: linear-gradient(135deg, #38bdf8, #a855f7);
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; color:#fff; }
+  .contact-item .ci-icon svg { width:18px; height:18px; }
+  .contact-item .ci-text { flex:1; text-align:right; }
+  .contact-item .ci-label { font-size:10px; opacity:0.65; }
+  .contact-item .ci-value { font-size:13px; font-weight:600; direction: ltr; }
+
+  .settings-overlay { position:fixed; inset:0; background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); z-index:400;
+    opacity:0; pointer-events:none; transition: opacity .3s ease;
+    display:flex; align-items:center; justify-content:center; padding:16px; }
+  .settings-overlay.open { opacity:1; pointer-events:auto; }
+  .settings-panel { background: linear-gradient(180deg, #0f172a, #1e293b);
+    border: 1px solid rgba(255,255,255,0.15); border-radius:22px;
+    width:100%; max-width:440px; max-height:88vh; overflow-y:auto;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7); transform: scale(0.94);
+    transition: transform .3s cubic-bezier(.4,0,.2,1); color:#fff; -webkit-overflow-scrolling: touch; }
+  .settings-overlay.open .settings-panel { transform: scale(1); }
+  body.light-mode .settings-panel { background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+    color:#0f172a; border-color: rgba(0,0,0,0.1); }
+  .settings-header { padding:18px 20px 14px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.1); position:sticky; top:0; background: inherit; z-index:2; }
+  body.light-mode .settings-header { border-color: rgba(0,0,0,0.1); }
+  .settings-header h2 { font-size:18px; display:flex; align-items:center; gap:8px; }
+  .settings-close { width:32px; height:32px; border-radius:50%; background: rgba(255,255,255,0.1);
+    border:none; color:inherit; cursor:pointer; transition: all .2s; font-family: inherit;
+    display:flex; align-items:center; justify-content:center; }
+  .settings-close svg { width:16px; height:16px; }
+  .settings-close:hover { background: rgba(239,68,68,0.3); }
+
+  .settings-body { padding:16px 20px 22px; }
+  .setting-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07); gap:10px; }
+  body.light-mode .setting-row { border-color: rgba(0,0,0,0.07); }
+  .setting-row:last-child { border-bottom:none; }
+  .setting-label { font-size:13px; display:flex; align-items:center; gap:7px; flex:1; }
+
+  .switch { position:relative; width:42px; height:24px; background: rgba(255,255,255,0.2);
+    border-radius:12px; cursor:pointer; transition: all .3s; flex-shrink:0; touch-action: manipulation; }
+  .switch::after { content:''; position:absolute; top:3px; right:3px; width:18px; height:18px;
+    background:#fff; border-radius:50%; transition: all .3s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+  .switch.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .switch.on::after { right: calc(100% - 21px); }
+
+  .settings-slider { display:flex; align-items:center; gap:8px; flex:0 0 130px; }
+  .settings-slider input[type=range] { flex:1; accent-color: var(--accent); }
+  .settings-slider .val { font-size:11px; min-width:30px; text-align:left; opacity:0.7; font-variant-numeric: tabular-nums; }
+
+  .settings-select { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+    color:inherit; padding:7px 10px; border-radius:9px; font-size:12px; cursor:pointer;
+    outline:none; font-family: inherit; }
+  body.light-mode .settings-select { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
+  .settings-select option { background: #1e293b; color:#fff; }
+  body.light-mode .settings-select option { background:#fff; color:#0f172a; }
+
+  .settings-section-title { font-size:11px; text-transform:uppercase; letter-spacing:1.5px;
+    color: var(--text-dim); margin:16px 0 6px; font-weight:700; }
+  .reset-btn { width:100%; margin-top:16px; padding:11px; background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.4); color:#f87171; border-radius:12px;
+    font-weight:600; cursor:pointer; font-family: inherit; font-size:13px;
+    transition: all .25s; touch-action: manipulation;
+    display:flex; align-items:center; justify-content:center; gap:6px; }
+  .reset-btn:hover { background: rgba(239,68,68,0.3); color:#fff; }
+
+  .detail-modal { position:fixed; inset:0; background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index:500;
+    opacity:0; pointer-events:none; transition: opacity .3s ease;
+    display:flex; align-items:center; justify-content:center; padding:20px; }
+  .detail-modal.open { opacity:1; pointer-events:auto; }
+  .detail-content { background: linear-gradient(180deg, #0f172a, #1e293b);
+    border: 1px solid rgba(255,255,255,0.15); border-radius:20px; padding:24px;
+    max-width:380px; width:100%; color:#fff; transform: scale(0.9); transition: transform .3s; }
+  body.light-mode .detail-content { background: linear-gradient(180deg,#f8fafc,#e2e8f0); color:#0f172a; }
+  .detail-modal.open .detail-content { transform: scale(1); }
+  .detail-content h3 { margin-bottom:10px; font-size:18px; display:flex; align-items:center; gap:8px; }
+  .detail-content p { font-size:14px; line-height:1.8; opacity:0.9; margin-bottom:16px; }
+  .detail-content .close-btn { width:100%; padding:10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color:#fff; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family: inherit; }
+
+  .toast { position:fixed; top:20px; left:50%; transform: translate(-50%,-120px);
+    background: rgba(15,23,42,0.95); color:#fff; padding:12px 20px; border-radius:12px;
+    border: 1px solid rgba(255,255,255,0.2); font-size:13px; z-index:1000;
+    transition: transform .4s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.5); backdrop-filter: blur(16px);
+    max-width: 90vw; text-align:center; display:flex; align-items:center; gap:8px; justify-content:center; }
+  .toast.show { transform: translate(-50%,0); }
+  .toast svg { width:16px; height:16px; }
+
+  .loading { text-align:center; padding:50px 20px; }
+  .spinner { width:44px; height:44px; margin:0 auto 16px;
+    border:3px solid rgba(255,255,255,0.15); border-top-color: var(--accent);
+    border-right-color: var(--accent2); border-radius:50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .section-title { font-size:13px; font-weight:600; margin-bottom:12px;
+    display:flex; align-items:center; gap:7px; opacity:0.95; }
+  .section-title svg { width:16px; height:16px; }
+
+  .live-clock { font-variant-numeric: tabular-nums; font-size:12px; padding:4px 10px;
+    background: rgba(255,255,255,0.08); border-radius:16px;
+    display:inline-flex; align-items:center; gap:5px; }
+  .live-clock svg { width:12px; height:12px; }
+
+  .footer { text-align:center; padding:20px 16px 10px; color: var(--text-dim); font-size:11px; line-height:1.8; }
+  .footer .heart { color:#ef4444; display:inline-block; width:12px; height:12px;
+    vertical-align:-2px; animation: beat 1.5s ease-in-out infinite; }
+  .footer .heart svg { width:100%; height:100%; fill:currentColor; stroke:currentColor; }
+  @keyframes beat { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.25); } }
+
+  @media (max-width: 600px) {
+    .brand { display:none; }
+    .temp-main { font-size:74px; letter-spacing:-3px; }
+    .we-icon { width:100px; height:100px; }
+    .card { padding:16px 14px; border-radius:18px; }
+    .grid-stats { grid-template-columns: repeat(3, 1fr); gap:6px; }
+    .stat { padding:10px 4px; }
+    .stat .value { font-size:14px; }
+    .forecast { grid-template-columns: repeat(4, 1fr); }
+    .sound-info { display:none; }
+    .about-btn { padding:12px 6px; font-size:11px; }
+    .sound-panel input[type=range] { width:55px; }
+    .bg-photo.kenburns { animation: none; }
+    .chart-wrap { height:110px; }
+    .header { padding:6px 8px; }
+    .btn { padding:9px 11px; font-size:13px; }
+    .news-ticker .ticker-label { font-size:11px; padding:0 10px; }
+    .news-ticker .ticker-item { font-size:12px; }
+  }
+  @media (max-width: 380px) {
+    .grid-stats { grid-template-columns: repeat(2, 1fr); }
+    .temp-main { font-size:62px; }
+    .forecast { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="sky-grad" id="skyGrad"></div>
+<div class="bg-photo" id="bgPhoto"></div>
+<div class="bg-overlay"></div>
+<div id="layers"></div>
+
+<div class="container">
+
+  <div class="header">
+    <div class="brand">
+      <div class="logo" id="brandLogo"></div>
+      <span>NOOBR<sup>™</sup></span>
+    </div>
+    <div class="search-wrap">
+      <input id="city" type="search" placeholder="اكتب اسم مدينة..." onkeydown="if(event.key==='Enter'){searchCity();this.blur();}" autocomplete="off">
+      <button class="btn icon" onclick="searchCity()" aria-label="بحث" id="searchBtn"></button>
+      <button class="btn ghost icon" onclick="useMyLocation()" aria-label="موقعي" id="locBtn"></button>
+    </div>
+    <button class="btn ghost icon" onclick="openSettings()" aria-label="الإعدادات" id="settingsBtn"></button>
+  </div>
+
+  <div class="news-ticker" id="newsTicker">
+    <div class="ticker-label">
+      <span class="dot"></span>
+      <span>أخبار الطقس</span>
+    </div>
+    <div class="ticker-track-wrap">
+      <div class="ticker-track" id="tickerTrack">
+        <span class="ticker-loading">جاري تحميل الأخبار...</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="app">
+    <div class="card"><div class="loading"><div class="spinner"></div>جاري تحديد موقعك...</div></div>
+  </div>
+
+  <div class="footer">
+    <div>صُنع بـ <span class="heart" id="heartIcon"></span> بواسطة NOOBR™</div>
+    <div style="margin-top:4px;opacity:0.6">© 2026 NOOBR Weather Studio</div>
+  </div>
+</div>
+
+<div class="sound-panel">
+  <button class="play-btn" id="soundBtn" onclick="toggleSound()" aria-label="صوت"></button>
+  <input type="range" id="volume" min="0" max="100" value="50" oninput="setVolume(this.value)" aria-label="مستوى الصوت">
+  <div class="sound-info" id="soundInfo">صوت الطقس</div>
+</div>
+
+<button class="mode-toggle" id="modeBtn" onclick="toggleMode()" aria-label="الوضع"></button>
+<button class="about-btn" onclick="openAbout()">من نحن؟</button>
+
+<div class="overlay" id="drawerOverlay" onclick="closeAbout()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <h2 id="drawerTitle"></h2>
+    <button class="drawer-close" onclick="closeAbout()" aria-label="إغلاق" id="drawerCloseBtn"></button>
+  </div>
+  <div class="drawer-body">
+    <div class="dev-card">
+      <div class="dev-avatar">N</div>
+      <div class="dev-name">NOOBR<sup>™</sup></div>
+      <div class="dev-role">مطوّر ومصمم مواقع ويب</div>
+      <div class="feature-badges">
+        <span class="badge">UI/UX</span>
+        <span class="badge">Frontend</span>
+        <span class="badge">Web Apps</span>
+        <span class="badge">Animation</span>
+      </div>
+    </div>
+
+    <div class="dev-desc">
+      مرحباً 👋<br>
+      أنا <b>NOOBR™</b>، مطوّر ومصمم مواقع ويب. هذا الموقع من تطويري الكامل، من التصميم إلى الكود، بأحدث تقنيات الويب ليكون سريعاً وجميلاً وعملياً.
+      <br><br>
+      <b>مهمتي:</b> بناء أدوات ويب مجانية، احترافية، وبواجهات حديثة يستفيد منها الجميع.
+    </div>
+
+    <div class="settings-section-title" style="margin-top:0">تواصل معي</div>
+
+    <a class="contact-item" href="https://t.me/NO_OB_R" target="_blank" rel="noopener">
+      <div class="ci-icon" id="tgIcon"></div>
+      <div class="ci-text">
+        <div class="ci-label">تليجرام</div>
+        <div class="ci-value">@NO_OB_R</div>
+      </div>
+    </a>
+
+    <div class="dev-desc" style="margin-top:16px;border-right-color:#a855f7">
+      <b>ملاحظة:</b> للتواصل والاستفسارات والدعم، راسلني على تليجرام. يسعدني أسمع اقتراحاتك!
+    </div>
+  </div>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <h2 id="settingsTitle"></h2>
+      <button class="settings-close" onclick="closeSettings()" aria-label="إغلاق" id="settingsCloseBtn"></button>
+    </div>
+    <div class="settings-body">
+
+      <div class="settings-section-title">المظهر</div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icPhotos"></span> خلفية صور حقيقية</div>
+        <div class="switch on" id="sw-photos" onclick="toggleSetting('photos')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icDark"></span> الوضع الليلي</div>
+        <div class="switch" id="sw-dark" onclick="toggleSetting('dark')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icParticles"></span> جزيئات متحركة</div>
+        <div class="switch on" id="sw-particles" onclick="toggleSetting('particles')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icKenburns"></span> تأثير Ken Burns</div>
+        <div class="switch on" id="sw-kenburns" onclick="toggleSetting('kenburns')"></div>
+      </div>
+
+      <div class="settings-section-title">الصوت</div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icVol"></span> مستوى الصوت</div>
+        <div class="settings-slider">
+          <input type="range" min="0" max="100" value="50" id="setVol" oninput="setVolume(this.value)">
+          <span class="val" id="volVal">50%</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icSource"></span> مصدر الصوت</div>
+        <select class="settings-select" id="setAudioSource" onchange="setAudioSourceMode(this.value)">
+          <option value="auto">تلقائي (إنترنت ← محلي)</option>
+          <option value="online">إنترنت فقط</option>
+          <option value="generated">محلي فقط</option>
+        </select>
+      </div>
+
+      <div class="settings-section-title">الوحدات</div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icUnit"></span> وحدة الحرارة</div>
+        <select class="settings-select" id="setUnit" onchange="switchUnitTo(this.value)">
+          <option value="C">°C مئوية</option>
+          <option value="F">°F فهرنهايت</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icWind"></span> وحدة الريح</div>
+        <select class="settings-select" id="setWind" onchange="setWindUnit(this.value)">
+          <option value="kmh">km/h</option>
+          <option value="mph">mph</option>
+          <option value="ms">m/s</option>
+        </select>
+      </div>
+
+      <div class="settings-section-title">التنبيهات</div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icNotify"></span> تنبيه تغيّر الطقس</div>
+        <div class="switch" id="sw-notify" onclick="toggleSetting('notify')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icUrgent"></span> تنبيه الأخبار العاجلة</div>
+        <div class="switch on" id="sw-urgentNotify" onclick="toggleSetting('urgentNotify')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icAuto"></span> تحديث تلقائي كل 10د</div>
+        <div class="switch on" id="sw-auto" onclick="toggleSetting('auto')"></div>
+      </div>
+
+      <div class="settings-section-title">الأخبار</div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icNews"></span> شريط أخبار الطقس</div>
+        <div class="switch on" id="sw-news" onclick="toggleSetting('news')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label"><span id="icTimer"></span> سرعة الشريط</div>
+        <select class="settings-select" id="setNewsSpeed" onchange="setNewsSpeed(this.value)">
+          <option value="30">بطيء</option>
+          <option value="20" selected>عادي</option>
+          <option value="12">سريع</option>
+        </select>
+      </div>
+
+      <button class="reset-btn" onclick="resetSettings()" id="resetBtn"></button>
+    </div>
+  </div>
+</div>
+
+<div class="detail-modal" id="detailModal" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-content">
+    <h3 id="detailTitle">تفاصيل</h3>
+    <p id="detailText">...</p>
+    <button class="close-btn" onclick="closeDetail()">فهمت</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ========== SVG Icon Library ========== */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgIcon(path, cls = 'ico') {
+  return `<svg class="${cls}" viewBox="0 0 24 24" xmlns="${SVG_NS}">${path}</svg>`;
+}
+const ICONS = {
+  search: svgIcon('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
+  location: svgIcon('<path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>'),
+  settings: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+  close: svgIcon('<path d="M18 6L6 18M6 6l12 12"/>'),
+  check: svgIcon('<path d="M20 6L9 17l-5-5"/>'),
+  plus: svgIcon('<path d="M12 5v14M5 12h14"/>'),
+  star: svgIcon('<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>'),
+  starFill: svgIcon('<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/>'),
+  bookmark: svgIcon('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>'),
+  bookmarkFill: svgIcon('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="currentColor"/>'),
+  trash: svgIcon('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
+  refresh: svgIcon('<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>'),
+  share: svgIcon('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'),
+  bell: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>'),
+  info: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'),
+  calendar: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+  clock: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  chart: svgIcon('<path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/>'),
+  map: svgIcon('<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'),
+  sun: svgIcon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  moon: svgIcon('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
+  cloud: svgIcon('<path d="M18 10h-1.3A7 7 0 1 0 6 17h12a5 5 0 0 0 0-10z"/>'),
+  cloudSun: svgIcon('<path d="M12 2v2M4.9 4.9l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4"/><circle cx="12" cy="12" r="3"/><path d="M18 15h-1a4 4 0 1 0-7.5 2H18a3 3 0 0 0 0-6z"/>'),
+  rain: svgIcon('<path d="M16 13H8a4 4 0 1 1 0-8 5 5 0 0 1 9.6 1.5A3.5 3.5 0 0 1 16 13z"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/>'),
+  thunder: svgIcon('<path d="M19 10h-2V5a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v5H5a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h3l2 4h4l2-4h3a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2z"/><path d="M13 22l1-4"/>'),
+  snow: svgIcon('<path d="M12 2v20M4.2 6.8l15.6 10.4M19.8 6.8L4.2 17.2"/><circle cx="12" cy="12" r="2.5"/>'),
+  fog: svgIcon('<path d="M3 8h18M3 12h12M3 16h18M15 12h6"/>'),
+  wind: svgIcon('<path d="M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2M17.7 7.7A2.5 2.5 0 1 1 19.5 12H2"/>'),
+  drop: svgIcon('<path d="M12 2.7l5.7 5.7a8 8 0 1 1-11.4 0L12 2.7z"/>'),
+  humidity: svgIcon('<path d="M12 2.7l5.7 5.7a8 8 0 1 1-11.4 0L12 2.7z"/><path d="M9 14c1 1 2 1 3 0s2-1 3 0"/>'),
+  pressure: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 12l4-4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>'),
+  eye: svgIcon('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>'),
+  uv: svgIcon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  moonPhase: svgIcon('<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 3a9 9 0 0 1 0 18"/>'),
+  sunrise: svgIcon('<path d="M17 18a5 5 0 0 0-10 0M12 2v7M4.2 10.2l1.4 1.4M18.4 11.6l1.4-1.4M2 18h2M20 18h2M2 22h20"/>'),
+  sunset: svgIcon('<path d="M17 18a5 5 0 0 0-10 0M12 9V2M4.2 10.2l1.4 1.4M18.4 11.6l1.4-1.4M2 18h2M20 18h2M2 22h20"/>'),
+  thermometer: svgIcon('<path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/>'),
+  air: svgIcon('<path d="M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2M17.7 7.7A2.5 2.5 0 1 1 19.5 12H2"/>'),
+  sound: svgIcon('<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>'),
+  soundOff: svgIcon('<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/>'),
+  news: svgIcon('<path d="M4 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M8 8h6M8 12h6M8 16h4"/>'),
+  bulb: svgIcon('<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/>'),
+  plane: svgIcon('<path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>'),
+  sparkles: svgIcon('<path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3zM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15zM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7L5 15z"/>'),
+  palette: svgIcon('<circle cx="12" cy="12" r="10"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="10" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/>'),
+  globe: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/>'),
+  image: svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>'),
+  layers: svgIcon('<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>'),
+  timer: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>'),
+  filter: svgIcon('<path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/>'),
+  alert: svgIcon('<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>'),
+  heart: svgIcon('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z" fill="currentColor"/>')
+};
+
+/* ========== Utilities ========== */
+function safeParse(str, fallback) {
+  try { return str ? JSON.parse(str) : fallback; } catch(e) { return fallback; }
+}
+function $(id) { return document.getElementById(id); }
+function toF(c) { return Math.round(c * 9/5 + 32); }
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+/* ========== Device Detection ========== */
+const IS_MOBILE = window.matchMedia('(max-width: 768px)').matches ||
+                  /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const IS_LOW_END = IS_MOBILE && (navigator.deviceMemory || 4) <= 2;
+const PARTICLE_MULT = IS_LOW_END ? 0.25 : IS_MOBILE ? 0.4 : 1;
+const SUPPORTS_NOTIF = 'Notification' in window;
+
+/* ========== Inject Icons ========== */
+$('brandLogo').innerHTML = ICONS.cloudSun;
+$('searchBtn').innerHTML = ICONS.search;
+$('locBtn').innerHTML = ICONS.location;
+$('settingsBtn').innerHTML = ICONS.settings;
+$('modeBtn').innerHTML = ICONS.moon;
+$('soundBtn').innerHTML = ICONS.soundOff;
+$('drawerTitle').innerHTML = ICONS.sparkles + ' عن المطور';
+$('drawerCloseBtn').innerHTML = ICONS.close;
+$('settingsTitle').innerHTML = ICONS.settings + ' الإعدادات';
+$('settingsCloseBtn').innerHTML = ICONS.close;
+$('tgIcon').innerHTML = ICONS.plane;
+$('heartIcon').innerHTML = ICONS.heart;
+$('icPhotos').innerHTML = ICONS.image;
+$('icDark').innerHTML = ICONS.moon;
+$('icParticles').innerHTML = ICONS.sparkles;
+$('icKenburns').innerHTML = ICONS.layers;
+$('icVol').innerHTML = ICONS.sound;
+$('icSource').innerHTML = ICONS.globe;
+$('icUnit').innerHTML = ICONS.thermometer;
+$('icWind').innerHTML = ICONS.wind;
+$('icNotify').innerHTML = ICONS.bell;
+$('icUrgent').innerHTML = ICONS.alert;
+$('icAuto').innerHTML = ICONS.refresh;
+$('icNews').innerHTML = ICONS.news;
+$('icTimer').innerHTML = ICONS.timer;
+$('resetBtn').innerHTML = ICONS.trash + ' إعادة تعيين كل الإعدادات';
+
+/* ========== State ========== */
+let currentCode = 0;
+let currentIsDay = true;
+let currentTemp = 0;
+let currentPhotoKey = '';
+let favorites = safeParse(localStorage.getItem('weatherFavs'), []);
+let compareList = safeParse(localStorage.getItem('weatherCompare'), []);
+let savedNews = safeParse(localStorage.getItem('weatherSavedNews'), []);
+let lastCoords = null;
+let lastCity = '';
+let lastData = null;
+let lastAqiData = null;
+let autoUpdateTimer = null;
+let lightningTimer = null;
+let clockTimer = null;
+let newsTimer = null;
+let newsCache = [];
+let onlySavedNews = false;
+let newsFilter = '';
+
+let settings = Object.assign({
+  photos: true, dark: false, particles: true, kenburns: true,
+  notify: false, auto: true, news: true, urgentNotify: true,
+  unit: 'C', windUnit: 'kmh', newsSpeed: 20, audioSourceMode: 'auto'
+}, safeParse(localStorage.getItem('weatherSettings'), {}));
+
+let unit = settings.unit;
+let windUnit = settings.windUnit;
+let newsSpeed = settings.newsSpeed;
+let audioSourceMode = settings.audioSourceMode || 'auto';
+
+/* ========== Formatting helpers ========== */
+function fmtTemp(c) { return unit === 'C' ? Math.round(c) + '°' : toF(c) + '°'; }
+function fmtWind(kmh) {
+  if (windUnit === 'mph') return (kmh * 0.621371).toFixed(1) + ' mph';
+  if (windUnit === 'ms') return (kmh / 3.6).toFixed(1) + ' m/s';
+  return Math.round(kmh) + ' km/h';
+}
+function isNightHour() { const h = new Date().getHours(); return h < 6 || h >= 19; }
+function showToast(msg) {
+  const t = $('toast');
+  t.innerHTML = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+function persistSettings() {
+  localStorage.setItem('weatherSettings', JSON.stringify(settings));
+}
+
+/* ========== Moon Phase ========== */
+function getMoonPhase(date = new Date()) {
+  const lp = 2551443;
+  const newMoon = new Date('2000-01-06T18:14:00Z');
+  const phase = ((date - newMoon) / 1000) % lp;
+  const index = Math.floor(phase / (lp / 8));
+  const phases = [
+    { name:'محاق', icon:'moonPhase' },
+    { name:'هلال متزايد', icon:'moon' },
+    { name:'ربع أول', icon:'moon' },
+    { name:'أحدب متزايد', icon:'moon' },
+    { name:'بدر', icon:'moon' },
+    { name:'أحدب متناقص', icon:'moon' },
+    { name:'ربع أخير', icon:'moon' },
+    { name:'هلال متناقص', icon:'moon' }
+  ];
+  return phases[index];
+}
+
+/* ========== AQI ========== */
+function aqiInfo(aqi) {
+  if (aqi == null) return { label:'—', color:'#94a3b8', desc:'غير متوفر' };
+  if (aqi <= 20) return { label:'ممتاز', color:'#22c55e', desc:'هواء نظيف جداً' };
+  if (aqi <= 40) return { label:'جيد', color:'#84cc16', desc:'جودة هواء جيدة' };
+  if (aqi <= 60) return { label:'متوسط', color:'#eab308', desc:'مقبول للأغلبية' };
+  if (aqi <= 80) return { label:'ضعيف', color:'#f97316', desc:'قد يزعج الحساسين' };
+  if (aqi <= 100) return { label:'سيء', color:'#ef4444', desc:'تجنب المجهود الطويل' };
+  return { label:'خطير', color:'#7c3aed', desc:'ابقَ في الداخل' };
+}
+
+/* ========== Facts ========== */
+const WEATHER_FACTS = [
+  'قطرة المطر تنزل بسرعة تصل إلى 30 كم/ساعة.',
+  'البرق أسرع من الرعد لأن الضوء يسبق الصوت.',
+  'أبرد قارة على الأرض هي أنتاركتيكا.',
+  'يمكن أن تصل سرعة الريح في العواصف إلى 300 كم/س.',
+  'الثلج ليس أبيض فعلياً بل شفاف، والانعكاس يجعله يبدو أبيض.',
+  'قوس قزح دائرة كاملة، لكننا نرى نصفها فقط.',
+  'سماء المريخ حمراء بسبب الغبار.',
+  'ثاني أكسيد الكبريت في الهواء يسبب المطر الحمضي.',
+  'الغيوم تساهم في تنظيم درجة حرارة الأرض.',
+  'الشمس تبعد عن الأرض 150 مليون كم تقريباً.',
+  'أعلى درجة حرارة سُجلت على الأرض كانت 56.7°C.',
+  'البرق يصل إلى 30,000 درجة مئوية — أشد حرارة من سطح الشمس.',
+  'الغيوم الركامية قد تزن أكثر من مليون طن.'
+];
+function pickFact() { return WEATHER_FACTS[Math.floor(Math.random() * WEATHER_FACTS.length)]; }
+
+/* ========== Weather Icons ========== */
+function noobrIcon(type) {
+  const map = {
+    sun: ICONS.sun, moon: ICONS.moon, moonPhase: ICONS.moonPhase,
+    cloud: ICONS.cloud, cloudDay: ICONS.cloudSun, cloudNight: ICONS.cloud,
+    rain: ICONS.rain, thunder: ICONS.thunder,
+    snow: ICONS.snow, fog: ICONS.fog, sunset: ICONS.sunset
+  };
+  return map[type] || ICONS.cloud;
+}
+
+/* ========== Weather Photos ========== */
+const WEATHER_PHOTOS = {
+  'clear-day':    'https://images.unsplash.com/photo-1601297183305-6df142704ea2?w=1600&q=70&auto=format&fit=crop',
+  'clear-sunset': 'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=1600&q=70&auto=format&fit=crop',
+  'clear-night':  'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=1600&q=70&auto=format&fit=crop',
+  'cloudy':       'https://images.unsplash.com/photo-1534088568595-a066f410bcda?w=1600&q=70&auto=format&fit=crop',
+  'rain':         'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=1600&q=70&auto=format&fit=crop',
+  'thunder':      'https://images.unsplash.com/photo-1605727216801-e27ce1d0cc28?w=1600&q=70&auto=format&fit=crop',
+  'snow':         'https://images.unsplash.com/photo-1478265409131-1f65c88f965c?w=1600&q=70&auto=format&fit=crop',
+  'fog':          'https://images.unsplash.com/photo-1487621167305-5d248087c724?w=1600&q=70&auto=format&fit=crop',
+  'aurora':       'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=1600&q=70&auto=format&fit=crop'
+};
+
+/* ========== Decode ========== */
+function decodeWeather(code, isDay) {
+  const map = {
+    0:  { desc:'صافي',           type: isDay?'sun':'moon',           bg: isDay?'clear-day':'clear-night', accent:'#fbbf24', accent2:'#f59e0b' },
+    1:  { desc:'صافي غالباً',    type: isDay?'sun':'moon',           bg: isDay?'clear-day':'clear-night', accent:'#fbbf24', accent2:'#f59e0b' },
+    2:  { desc:'غائم جزئياً',    type: isDay?'cloudDay':'cloudNight',bg:'cloudy', accent:'#94a3b8', accent2:'#64748b' },
+    3:  { desc:'غائم',           type:'cloud',                       bg:'cloudy', accent:'#94a3b8', accent2:'#64748b' },
+    45: { desc:'ضباب',           type:'fog',                         bg:'fog',    accent:'#cbd5e1', accent2:'#94a3b8' },
+    48: { desc:'ضباب متجمد',     type:'fog',                         bg:'fog',    accent:'#cbd5e1', accent2:'#94a3b8' },
+    51: { desc:'رذاذ خفيف',      type:'rain',                        bg:'rain',   accent:'#38bdf8', accent2:'#0284c7' },
+    53: { desc:'رذاذ',           type:'rain',                        bg:'rain',   accent:'#38bdf8', accent2:'#0284c7' },
+    55: { desc:'رذاذ كثيف',      type:'rain',                        bg:'rain',   accent:'#38bdf8', accent2:'#0284c7' },
+    61: { desc:'مطر خفيف',       type:'rain',                        bg:'rain',   accent:'#0ea5e9', accent2:'#0369a1' },
+    63: { desc:'مطر',            type:'rain',                        bg:'rain',   accent:'#0ea5e9', accent2:'#0369a1' },
+    65: { desc:'مطر غزير',       type:'rain',                        bg:'rain',   accent:'#0ea5e9', accent2:'#0369a1' },
+    71: { desc:'ثلج خفيف',       type:'snow',                        bg:'snow',   accent:'#e0f2fe', accent2:'#7dd3fc' },
+    73: { desc:'ثلج',            type:'snow',                        bg:'snow',   accent:'#e0f2fe', accent2:'#7dd3fc' },
+    75: { desc:'ثلج كثيف',       type:'snow',                        bg:'snow',   accent:'#e0f2fe', accent2:'#7dd3fc' },
+    77: { desc:'حبيبات ثلج',     type:'snow',                        bg:'snow',   accent:'#e0f2fe', accent2:'#7dd3fc' },
+    80: { desc:'زخات مطر',       type:'rain',                        bg:'rain',   accent:'#0ea5e9', accent2:'#0369a1' },
+    81: { desc:'زخات قوية',      type:'rain',                        bg:'rain',   accent:'#0ea5e9', accent2:'#0369a1' },
+    82: { desc:'زخات عنيفة',     type:'thunder',                     bg:'thunder',accent:'#7c3aed', accent2:'#4c1d95' },
+    85: { desc:'زخات ثلج',       type:'snow',                        bg:'snow',   accent:'#e0f2fe', accent2:'#7dd3fc' },
+    86: { desc:'زخات ثلج كثيفة', type:'snow',                        bg:'snow',   accent:'#e0f2fe', accent2:'#7dd3fc' },
+    95: { desc:'عاصفة رعدية',    type:'thunder',                     bg:'thunder',accent:'#a855f7', accent2:'#6b21a8' },
+    96: { desc:'عاصفة مع برد',   type:'thunder',                     bg:'thunder',accent:'#a855f7', accent2:'#6b21a8' },
+    99: { desc:'عاصفة عنيفة',    type:'thunder',                     bg:'thunder',accent:'#a855f7', accent2:'#6b21a8' }
+  };
+  return map[code] || { desc:'غير معروف', type:'cloud', bg:'cloudy', accent:'#94a3b8', accent2:'#64748b' };
+}
+
+const DAY_NAMES = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+
+/* ========== Location ========== */
+function useMyLocation() {
+  if (!navigator.geolocation) {
+    showToast(ICONS.alert + ' المتصفح ما يدعم الموقع');
+    loadByCoords(33.3152, 44.3661, 'بغداد');
+    return;
+  }
+  showLoading(ICONS.location + ' جاري تحديد موقعك...');
+  navigator.geolocation.getCurrentPosition(
+    p => loadByCoords(p.coords.latitude, p.coords.longitude),
+    () => { loadByCoords(33.3152, 44.3661, 'بغداد'); },
+    { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
+  );
+}
+
+function searchCity() {
+  const city = $('city').value.trim();
+  if (!city) return;
+  showLoading(ICONS.search + ' جاري البحث...');
+  fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=ar`)
+    .then(r => r.json())
+    .then(geo => {
+      if (!geo.results || !geo.results.length) {
+        showError(ICONS.close + ' ما لقيت المدينة. جرب بالإنجليزي.');
+        return;
+      }
+      const g = geo.results[0];
+      const name = [g.name, g.country].filter(Boolean).join('، ');
+      loadByCoords(g.latitude, g.longitude, name);
+    })
+    .catch(() => showError(ICONS.alert + ' صار خطأ بالبحث'));
+}
+
+/* ========== Load ========== */
+async function loadByCoords(lat, lon, name) {
+  lastCoords = { lat, lon };
+  if (lightningTimer) { clearTimeout(lightningTimer); lightningTimer = null; }
+
+  try {
+    const weatherURL = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+      + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,`
+      + `wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure,uv_index,visibility,dew_point_2m,precipitation`
+      + `&hourly=temperature_2m,weather_code,precipitation_probability,apparent_temperature`
+      + `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_sum,wind_speed_10m_max`
+      + `&timezone=auto&forecast_days=7`;
+
+    const aqiURL = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5,european_aqi&timezone=auto`;
+
+    const [weather, aqi] = await Promise.all([
+      fetch(weatherURL).then(r => r.json()),
+      fetch(aqiURL).then(r => r.json()).catch(() => null)
+    ]);
+
+    if (!name) name = `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
+    lastCity = name;
+    lastData = weather;
+    lastAqiData = aqi;
+
+    checkAndNotify(weather.current.weather_code);
+    renderWeather(weather, name, aqi);
+    applyTheme(weather.current.weather_code, weather.current.is_day === 1);
+    applyBackground(weather.current.weather_code, weather.current.is_day === 1);
+    applyPhoto(weather.current.weather_code, weather.current.is_day === 1);
+    if (settings.particles) applyParticles(weather.current.weather_code, weather.current.is_day === 1);
+
+    // ✅ تبديل الصوت تلقائياً عند تغير الطقس
+    if (soundPlaying) { stopAllSounds(); playWeatherSound(weather.current.weather_code); }
+  } catch (e) {
+    console.error(e);
+    showError(ICONS.alert + ' تعذر جلب البيانات. تحقق من الإنترنت.');
+  }
+}
+
+/* ========== Render ========== */
+function renderWeather(data, name, aqiData) {
+  const c = data.current;
+  const d = data.daily;
+  const h = data.hourly;
+  const w = decodeWeather(c.weather_code, c.is_day === 1);
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' });
+  const dateStr = now.toLocaleDateString('ar-EG', { weekday:'long', day:'numeric', month:'long' });
+
+  currentCode = c.weather_code;
+  currentIsDay = c.is_day === 1;
+  currentTemp = c.temperature_2m;
+
+  const fact = pickFact();
+
+  const sunrise = new Date(d.sunrise[0]);
+  const sunset = new Date(d.sunset[0]);
+  const sunriseStr = sunrise.toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' });
+  const sunsetStr = sunset.toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' });
+  const dayLength = sunset - sunrise;
+  const elapsed = now - sunrise;
+  let sunPct = Math.max(0, Math.min(1, elapsed / dayLength));
+  if (now > sunset || now < sunrise) sunPct = -1;
+
+  const chartHours = [];
+  const nowHour = now.getHours();
+  for (let i = 0; i < 24; i++) {
+    const idx = nowHour + i;
+    const val = h.temperature_2m[idx];
+    if (val == null) break;
+    chartHours.push({ t: val, h: idx });
+  }
+  const chartSVG = drawChartSafe(chartHours);
+
+  const hourLimit = IS_MOBILE ? 12 : 24;
+  let hourlyHTML = '';
+  for (let i = 0; i < hourLimit; i++) {
+    const idx = nowHour + i;
+    const tempVal = h.temperature_2m[idx];
+    const codeVal = h.weather_code[idx];
+    if (tempVal == null) break;
+    const hw = decodeWeather(codeVal, (idx % 24) >= 6 && (idx % 24) < 19);
+    const hourLabel = i === 0 ? 'الآن' : String(idx % 24).padStart(2, '0') + ':00';
+    hourlyHTML += `<div class="hour-card">
+      <div class="h">${hourLabel}</div>
+      <div class="ic-wrap">${noobrIcon(hw.type)}</div>
+      <div class="t">${fmtTemp(tempVal)}</div>
+    </div>`;
+  }
+
+  const allMin = Math.min(...d.temperature_2m_min);
+  const allMax = Math.max(...d.temperature_2m_max);
+  const range = allMax - allMin || 1;
+  let forecastHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const dw = decodeWeather(d.weather_code[i], true);
+    const date = new Date(d.time[i]);
+    const dayLabel = i === 0 ? 'اليوم' : DAY_NAMES[date.getDay()];
+    const low = d.temperature_2m_min[i];
+    const high = d.temperature_2m_max[i];
+    const barWidth = Math.max(20, 100 * (high - low) / range);
+    forecastHTML += `<div class="day">
+      <div class="name">${dayLabel}</div>
+      <div class="ic-wrap">${noobrIcon(dw.type)}</div>
+      <div class="hi">${fmtTemp(high)}</div>
+      <div class="lo">${fmtTemp(low)}</div>
+      <div class="bar" style="width:${barWidth}%"></div>
+    </div>`;
+  }
+
+  const favHTML = favorites.length
+    ? favorites.map((f, i) => `<div class="fav-chip" onclick="loadFav(${i})">
+        ${ICONS.location.replace('class="ico"','class="ico ico-sm"')} ${escapeHtml(f.name)}
+        <span class="x" onclick="event.stopPropagation();removeFav(${i})">${ICONS.close.replace('class="ico"','class="ico ico-sm"')}</span>
+      </div>`).join('')
+    : '<div style="opacity:0.6;font-size:12px">لا توجد مدن محفوظة — اضغط النجمة لإضافة المدينة</div>';
+
+  const cmpHTML = compareList.length
+    ? compareList.map((cmp, i) => {
+        const wc = decodeWeather(cmp.code, true);
+        return `<div class="compare-card">
+          <button class="cc-remove" onclick="removeCompare(${i})" aria-label="حذف">${ICONS.close.replace('class="ico"','class="ico ico-sm"')}</button>
+          <div class="cc-name">${ICONS.location.replace('class="ico"','class="ico ico-sm"')} ${escapeHtml(cmp.name)}</div>
+          <div class="cc-icon">${noobrIcon(wc.type)}</div>
+          <div class="cc-temp">${fmtTemp(cmp.temp)}</div>
+          <div class="cc-desc">${escapeHtml(wc.desc)}</div>
+        </div>`;
+      }).join('')
+    : '<div style="opacity:0.6;font-size:12px">أضف مدن للمقارنة بالضغط على زر الإضافة</div>';
+
+  const windDir = c.wind_direction_10m || 0;
+  const dirs = ['ش','ش.ش','ش.ق','ق','ج.ق','ج.ج','ج.غ','غ.ش'];
+  const dirLabel = dirs[Math.round(windDir / 45) % 8];
+
+  const uv = c.uv_index || 0;
+  const uvLabel = uv < 3 ? 'منخفض' : uv < 6 ? 'متوسط' : uv < 8 ? 'مرتفع' : 'خطر';
+
+  const aqiVal = aqiData && aqiData.current ? aqiData.current.us_aqi : null;
+  const aqiInfo_ = aqiInfo(aqiVal);
+  const pm25 = aqiData && aqiData.current ? aqiData.current.pm2_5 : null;
+
+  const moon = getMoonPhase(now);
+  const dayLenH = Math.floor(dayLength / 3600000);
+  const dayLenM = Math.floor((dayLength % 3600000) / 60000);
+
+  const newsListHTML = buildNewsListHTML();
+  const savedNewsHTML = savedNews.length
+    ? savedNews.map((n, i) => `<div class="saved-news-item">
+        ${ICONS.bookmarkFill.replace('class="ico"','class="ico ico-sm"')}
+        <a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">${escapeHtml(n.title)}</a>
+        <button class="remove" onclick="removeSavedNews(${i})" aria-label="حذف">${ICONS.close.replace('class="ico"','class="ico ico-sm"')}</button>
+      </div>`).join('')
+    : '<div style="opacity:0.6;font-size:12px">لا توجد أخبار محفوظة — اضغط أيقونة الحفظ بجانب أي خبر</div>';
+
+  $('app').innerHTML = `
+    <div class="card hero">
+      <div class="loc-name">
+        <span>${ICONS.location.replace('class="ico"','class="ico ico-lg"')} ${escapeHtml(name)}</span>
+        <span style="cursor:pointer;opacity:0.75" onclick="addFav()" title="أضف للمفضلة">${ICONS.star.replace('class="ico"','class="ico ico-lg"')}</span>
+        <span style="cursor:pointer;opacity:0.75" onclick="addCompare()" title="أضف للمقارنة">${ICONS.plus.replace('class="ico"','class="ico ico-lg"')}</span>
+      </div>
+      <div class="loc-time"><span class="live-clock" id="liveClock">${ICONS.clock.replace('class="ico"','class="ico ico-sm"')} ${timeStr} — ${dateStr}</span></div>
+
+      <div class="we-icon">${noobrIcon(w.type)}</div>
+      <div class="temp-main">${unit === 'C' ? Math.round(c.temperature_2m) : toF(c.temperature_2m)}<sup>°${unit}</sup></div>
+      <div class="desc-main">${w.desc}</div>
+      <div class="feels-main">الإحساس: ${fmtTemp(c.apparent_temperature)} • الرطوبة: ${c.relative_humidity_2m}%</div>
+
+      <div class="hero-actions">
+        <button class="btn ghost" onclick="switchUnit()">${ICONS.thermometer.replace('class="ico"','class="ico ico-sm"')} °${unit}</button>
+        <button class="btn ghost" onclick="shareWeather()">${ICONS.share.replace('class="ico"','class="ico ico-sm"')} مشاركة</button>
+        <button class="btn ghost" onclick="openSettings()">${ICONS.settings.replace('class="ico"','class="ico ico-sm"')} إعدادات</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="height:100px;position:relative">
+        <svg viewBox="0 0 300 100" preserveAspectRatio="none" style="width:100%;height:100%">
+          <defs><linearGradient id="sunPathGrad" x1="0" x2="1">
+            <stop offset="0%" stop-color="rgba(251,191,36,0.6)"/>
+            <stop offset="50%" stop-color="rgba(251,191,36,1)"/>
+            <stop offset="100%" stop-color="rgba(251,191,36,0.6)"/>
+          </linearGradient></defs>
+          <path d="M 20 90 Q 150 -20 280 90" stroke="url(#sunPathGrad)" stroke-width="2" fill="none" stroke-dasharray="4 4"/>
+        </svg>
+        <div style="position:absolute;width:20px;height:20px;border-radius:50%;
+          background:radial-gradient(circle,#fef3c7,#f59e0b);box-shadow:0 0 25px rgba(251,191,36,0.9);
+          transform:translate(-50%,-50%);transition:all 1s;
+          left:${sunPct >= 0 ? (20 + sunPct * 260) / 300 * 100 + '%' : '-10%'};
+          top:${sunPct >= 0 ? (90 - Math.sin(sunPct * Math.PI) * 105) + '%' : '90%'}"></div>
+      </div>
+      <div class="chart-labels">
+        <span>${ICONS.sunrise.replace('class="ico"','class="ico ico-sm"')} ${sunriseStr}</span>
+        <span>${ICONS.clock.replace('class="ico"','class="ico ico-sm"')} ${dayLenH}س ${dayLenM}د</span>
+        <span>${ICONS.sunset.replace('class="ico"','class="ico ico-sm"')} ${sunsetStr}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.chart} الحرارة في 24 ساعة</div>
+      <div class="chart-wrap">${chartSVG}</div>
+      <div class="chart-labels">
+        <span>الآن</span><span>+6س</span><span>+12س</span><span>+18س</span><span>+24س</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="grid-stats">
+        <div class="stat" onclick="showDetail('الريح','سرعة الريح الحالية ${fmtWind(c.wind_speed_10m)} من جهة ${dirLabel}. الهبّات قد تصل إلى ${fmtWind(c.wind_gusts_10m || c.wind_speed_10m * 1.4)}.')">
+          <div class="label">${ICONS.wind.replace('class="ico"','class="ico ico-sm"')} الريح</div>
+          <div class="value">${fmtWind(c.wind_speed_10m)}</div>
+          <div class="sub">${dirLabel}</div>
+        </div>
+        <div class="stat" onclick="showDetail('الضغط الجوي','${Math.round(c.surface_pressure)} hPa. القيمة الطبيعية عند مستوى البحر ~1013 hPa.')">
+          <div class="label">${ICONS.pressure.replace('class="ico"','class="ico ico-sm"')} الضغط</div>
+          <div class="value">${Math.round(c.surface_pressure)}</div>
+          <div class="sub">hPa</div>
+        </div>
+        <div class="stat" onclick="showDetail('الأشعة فوق البنفسجية','مؤشر UV = ${uv.toFixed(1)} (${uvLabel}). القيم العالية تحتاج حماية للجلد.')">
+          <div class="label">${ICONS.uv.replace('class="ico"','class="ico ico-sm"')} UV</div>
+          <div class="value">${uv.toFixed(1)}</div>
+          <div class="sub">${uvLabel}</div>
+        </div>
+        <div class="stat" onclick="showDetail('مدى الرؤية','${(c.visibility/1000).toFixed(1)} كم. الرؤية الجيدة >10 كم.')">
+          <div class="label">${ICONS.eye.replace('class="ico"','class="ico ico-sm"')} الرؤية</div>
+          <div class="value">${(c.visibility/1000).toFixed(1)}</div>
+          <div class="sub">km</div>
+        </div>
+        <div class="stat" onclick="showDetail('نقطة الندى','${fmtTemp(c.dew_point_2m || 0)}. إذا اقتربت من الحرارة، ترتفع احتمالية الضباب.')">
+          <div class="label">${ICONS.drop.replace('class="ico"','class="ico ico-sm"')} الندى</div>
+          <div class="value">${fmtTemp(c.dew_point_2m || 0)}</div>
+          <div class="sub">DP</div>
+        </div>
+        <div class="stat" onclick="showDetail('جودة الهواء','AQI = ${aqiVal ?? '—'} (${aqiInfo_.label}). ${aqiInfo_.desc}. PM2.5: ${pm25 != null ? pm25.toFixed(1) : '—'} μg/m³')">
+          <div class="label">${ICONS.air.replace('class="ico"','class="ico ico-sm"')} الهواء</div>
+          <div class="value" style="color:${aqiInfo_.color}">${aqiVal ?? '—'}</div>
+          <div class="sub">${aqiInfo_.label}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.clock} الساعات القادمة</div>
+      <div class="hourly">${hourlyHTML}</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.calendar} توقعات 7 أيام</div>
+      <div class="forecast">${forecastHTML}</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.globe} مقارنة المدن</div>
+      <div class="compare-grid">${cmpHTML}</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.star} المفضلة</div>
+      <div class="favs">${favHTML}</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.info} معلومات إضافية</div>
+      <div class="info-list">
+        <div class="info-row"><span class="ir-label">${ICONS.moon.replace('class="ico"','class="ico ico-sm"')} طور القمر</span><span class="ir-value">${noobrIcon(moon.icon).replace('class="ico"','class="ico ico-sm"')} ${moon.name}</span></div>
+        <div class="info-row"><span class="ir-label">${ICONS.rain.replace('class="ico"','class="ico ico-sm"')} هطول اليوم</span><span class="ir-value">${(d.precipitation_sum[0] || 0).toFixed(1)} مم</span></div>
+        <div class="info-row"><span class="ir-label">${ICONS.wind.replace('class="ico"','class="ico ico-sm"')} أقصى ريح اليوم</span><span class="ir-value">${fmtWind(d.wind_speed_10m_max[0] || 0)}</span></div>
+        <div class="info-row"><span class="ir-label">${ICONS.uv.replace('class="ico"','class="ico ico-sm"')} أقصى UV اليوم</span><span class="ir-value">${(d.uv_index_max[0] || 0).toFixed(1)}</span></div>
+        <div class="info-row"><span class="ir-label">${ICONS.humidity.replace('class="ico"','class="ico ico-sm"')} رطوبة الهواء</span><span class="ir-value">${c.relative_humidity_2m}%</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ICONS.news} أخبار الطقس</div>
+      <div class="news-tools">
+        <input type="text" id="newsFilterInput" placeholder="ابحث في الأخبار..." value="${escapeHtml(newsFilter)}" oninput="setNewsFilter(this.value)">
+        <button class="${onlySavedNews ? 'active' : ''}" onclick="toggleOnlySavedNews()">
+          ${ICONS.bookmark.replace('class="ico"','class="ico ico-sm"')} المحفوظة (${savedNews.length})
+        </button>
+        <button onclick="loadNews(true)" aria-label="تحديث">${ICONS.refresh.replace('class="ico"','class="ico ico-sm"')}</button>
+      </div>
+      <div id="newsList">${newsListHTML}</div>
+    </div>
+
+    <div class="card" id="savedNewsCard">
+      <div class="section-title">${ICONS.bookmarkFill} الأخبار المحفوظة (${savedNews.length})</div>
+      <div id="savedNewsList">${savedNewsHTML}</div>
+    </div>
+
+    <div class="fact-card">
+      <div class="fact-icon">${ICONS.bulb}</div>
+      <div>
+        <div class="fact-label">هل تعلم؟</div>
+        <div class="fact-text">${escapeHtml(fact)}</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="section-title" style="padding:16px 20px 0">${ICONS.map} موقعك على الخريطة</div>
+      <div class="map-wrap" style="margin:12px">
+        <iframe src="https://www.openstreetmap.org/export/embed.html?bbox=${lastCoords ? (lastCoords.lon-0.3) : 43.5}%2C${lastCoords ? (lastCoords.lat-0.3) : 32.5}%2C${lastCoords ? (lastCoords.lon+0.3) : 45}%2C${lastCoords ? (lastCoords.lat+0.3) : 34}&layer=mapnik${lastCoords ? '&marker='+lastCoords.lat+'%2C'+lastCoords.lon : ''}" loading="lazy" title="خريطة الموقع"></iframe>
+      </div>
+    </div>
+  `;
+}
+
+/* ========== News list builder ========== */
+function buildNewsListHTML() {
+  const displayed = getDisplayedNews();
+  if (!displayed.length) {
+    return '<div style="opacity:0.6;font-size:12px;padding:16px;text-align:center">لا تتوفر أخبار حالياً</div>';
+  }
+  return displayed.map(n => {
+    const isSaved = savedNews.some(s => s.link === n.link);
+    return `<div class="news-list-item">
+      <a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">${isUrgent(n.title) ? '<span class="urgent">عاجل: </span>' : ''}${escapeHtml(n.title)}</a>
+      <span class="src-tag">${escapeHtml(n.source || '')}</span>
+      <button class="save-btn ${isSaved ? 'saved' : ''}" data-link="${escapeHtml(n.link)}" onclick="toggleSaveNewsByLink(this)" aria-label="حفظ">
+        ${isSaved ? ICONS.bookmarkFill.replace('class="ico"','class="ico ico-sm"') : ICONS.bookmark.replace('class="ico"','class="ico ico-sm"')}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function refreshNewsSections() {
+  const list = $('newsList');
+  if (list) list.innerHTML = buildNewsListHTML();
+
+  const savedList = $('savedNewsList');
+  if (savedList) {
+    savedList.innerHTML = savedNews.length
+      ? savedNews.map((n, i) => `<div class="saved-news-item">
+          ${ICONS.bookmarkFill.replace('class="ico"','class="ico ico-sm"')}
+          <a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">${escapeHtml(n.title)}</a>
+          <button class="remove" onclick="removeSavedNews(${i})" aria-label="حذف">${ICONS.close.replace('class="ico"','class="ico ico-sm"')}</button>
+        </div>`).join('')
+      : '<div style="opacity:0.6;font-size:12px">لا توجد أخبار محفوظة — اضغط أيقونة الحفظ بجانب أي خبر</div>';
+  }
+}
+
+/* ========== Chart ========== */
+function drawChart(data) {
+  if (!data || data.length < 2) {
+    return '<div style="opacity:0.5;text-align:center;padding:40px 0">بيانات غير كافية</div>';
+  }
+  const W = 300, H = 100, PAD = 8;
+  const temps = data.map(d => d.t);
+  const minT = Math.min(...temps), maxT = Math.max(...temps);
+  const range = (maxT - minT) || 1;
+  const stepX = (W - PAD * 2) / (data.length - 1);
+
+  const points = data.map((d, i) => {
+    const x = PAD + i * stepX;
+    const y = H - PAD - ((d.t - minT) / range) * (H - PAD * 2);
+    return { x, y };
+  });
+
+  const linePath = 'M ' + points.map(p => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ');
+  const areaPath = linePath + ` L ${W - PAD} ${H - PAD} L ${PAD} ${H - PAD} Z`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(56,189,248,0.5)"/>
+        <stop offset="100%" stop-color="rgba(56,189,248,0)"/>
+      </linearGradient>
+    </defs>
+    <path d="${areaPath}" fill="url(#chartGrad)"/>
+    <path d="${linePath}" stroke="#38bdf8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${points[0].x.toFixed(1)}" cy="${points[0].y.toFixed(1)}" r="3" fill="#fbbf24"/>
+  </svg>`;
+}
+function drawChartSafe(data) {
+  try { return drawChart(data); }
+  catch(e) { return '<div style="opacity:0.5;text-align:center;padding:40px 0">مخطط غير متوفر</div>'; }
+}
+
+/* ========== Loading / Error ========== */
+function showLoading(msg) {
+  $('app').innerHTML = `<div class="card"><div class="loading"><div class="spinner"></div>${msg}</div></div>`;
+}
+function showError(msg) {
+  $('app').innerHTML = `<div class="card"><div class="loading">${msg}<br>
+    <button class="btn" style="margin-top:14px" onclick="useMyLocation()">
+      ${ICONS.refresh.replace('class="ico"','class="ico ico-sm"')} إعادة المحاولة
+    </button></div></div>`;
+}
+
+/* ========== Theme ========== */
+function applyTheme(code, isDay) {
+  const w = decodeWeather(code, isDay);
+  document.body.style.setProperty('--accent', w.accent);
+  document.body.style.setProperty('--accent2', w.accent2);
+}
+
+function applyBackground(code, isDay) {
+  const w = decodeWeather(code, isDay);
+  let cls = w.bg;
+  const h = new Date().getHours();
+  if (cls === 'clear-day' && (h === 17 || h === 18 || h === 5 || h === 6)) cls = 'clear-sunset';
+  $('skyGrad').className = 'sky-grad ' + cls;
+}
+
+function applyPhoto(code, isDay) {
+  const photo = $('bgPhoto');
+  if (!settings.photos || IS_LOW_END) {
+    photo.style.backgroundImage = '';
+    photo.classList.remove('active');
+    currentPhotoKey = '';
+    return;
+  }
+  const w = decodeWeather(code, isDay);
+  let key = w.bg;
+  const h = new Date().getHours();
+  if (key === 'clear-day' && (h === 17 || h === 18 || h === 5 || h === 6)) key = 'clear-sunset';
+
+  if (key === currentPhotoKey && photo.classList.contains('active')) return;
+  currentPhotoKey = key;
+
+  const url = WEATHER_PHOTOS[key];
+  if (!url) return;
+
+  const img = new Image();
+  img.decoding = 'async';
+  img.onload = () => {
+    photo.style.backgroundImage = `url('${url}')`;
+    photo.classList.add('active');
+    if (settings.kenburns && !IS_MOBILE) photo.classList.add('kenburns');
+    else photo.classList.remove('kenburns');
+  };
+  img.onerror = () => {
+    photo.style.backgroundImage = '';
+    photo.classList.remove('active');
+  };
+  img.src = url;
+}
+
+/* ========== Particles ========== */
+function applyParticles(code, isDay) {
+  const layer = $('layers');
+  layer.innerHTML = '';
+  if (!settings.particles) {
+    if (lightningTimer) { clearTimeout(lightningTimer); lightningTimer = null; }
+    return;
+  }
+
+  if (lightningTimer) { clearTimeout(lightningTimer); lightningTimer = null; }
+
+  const isRain = [51,53,55,61,63,65,80,81,82].includes(code);
+  const isHeavy = [82,95,96,99].includes(code);
+  const isSnow = [71,73,75,77,85,86].includes(code);
+  const isCloudy = [2,3,45,48].includes(code);
+  const isFog = [45,48].includes(code);
+  const isClear = [0,1].includes(code);
+  const isThunder = [95,96,99].includes(code);
+
+  if (isRain || isHeavy) {
+    const count = Math.round((isHeavy ? 100 : 55) * PARTICLE_MULT);
+    const wrap = document.createElement('div');
+    wrap.className = 'layer';
+    for (let i = 0; i < count; i++) {
+      const dr = document.createElement('div');
+      dr.className = 'drop';
+      dr.style.cssText = `left:${Math.random()*100}%;height:${(isHeavy?22:16)+Math.random()*8}px;
+        animation-duration:${(isHeavy?0.4:0.6)+Math.random()*0.4}s;
+        animation-delay:${Math.random()*2}s;opacity:${0.4+Math.random()*0.5}`;
+      wrap.appendChild(dr);
+    }
+    layer.appendChild(wrap);
+  }
+
+  if (isSnow) {
+    const count = Math.round(50 * PARTICLE_MULT);
+    const wrap = document.createElement('div');
+    wrap.className = 'layer';
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('div');
+      el.className = 'flake';
+      el.textContent = '❄';
+      el.style.cssText = `left:${Math.random()*100}%;animation-duration:${5+Math.random()*5}s;
+        animation-delay:${Math.random()*5}s;font-size:${10+Math.random()*10}px;color:rgba(255,255,255,0.8)`;
+      wrap.appendChild(el);
+    }
+    layer.appendChild(wrap);
+  }
+
+  if (!isDay && (isClear || isCloudy)) {
+    const count = Math.round(80 * PARTICLE_MULT);
+    const wrap = document.createElement('div');
+    wrap.className = 'layer';
+    for (let i = 0; i < count; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const size = 1 + Math.random() * 2;
+      s.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;
+        top:${Math.random()*70}%;animation-duration:${1.5+Math.random()*2.5}s;
+        animation-delay:${Math.random()*3}s`;
+      wrap.appendChild(s);
+    }
+    layer.appendChild(wrap);
+  }
+
+  if (isCloudy || isRain || isHeavy || isSnow) {
+    const numClouds = Math.round((isHeavy ? 10 : isCloudy ? 7 : 5) * PARTICLE_MULT);
+    const wrap = document.createElement('div');
+    wrap.className = 'layer';
+    for (let i = 0; i < numClouds; i++) {
+      const cl = document.createElement('div');
+      cl.className = 'cloud';
+      const size = 150 + Math.random() * 250;
+      cl.style.cssText = `width:${size}px;height:${size*0.35}px;
+        top:${5+Math.random()*40}%;animation-duration:${60+Math.random()*60}s;
+        animation-delay:${Math.random()*30}s;opacity:${0.3+Math.random()*0.4}`;
+      wrap.appendChild(cl);
+    }
+    layer.appendChild(wrap);
+  }
+
+  if (isFog) {
+    for (let i = 0; i < 2; i++) {
+      const el = document.createElement('div');
+      el.className = 'fog-layer';
+      el.style.cssText = `animation-duration:${20+i*8}s;opacity:${0.3+i*0.15}`;
+      layer.appendChild(el);
+    }
+  }
+
+  if (isClear && isDay && !IS_MOBILE) {
+    const sr = document.createElement('div');
+    sr.className = 'sun-rays';
+    layer.appendChild(sr);
+  }
+
+  if (isThunder) {
+    const lb = document.createElement('div');
+    lb.className = 'lightning';
+    layer.appendChild(lb);
+    const triggerLightning = () => {
+      if (!settings.particles || !lb.isConnected) return;
+      lb.classList.remove('flash');
+      void lb.offsetWidth;
+      lb.classList.add('flash');
+      lightningTimer = setTimeout(triggerLightning, 4000 + Math.random() * 8000);
+    };
+    lightningTimer = setTimeout(triggerLightning, 2000);
+  }
+
+  if (isClear && !isDay && !IS_MOBILE) {
+    for (let i = 0; i < 8; i++) {
+      const ff = document.createElement('div');
+      ff.className = 'firefly';
+      ff.style.cssText = `left:${Math.random()*100}%;top:${40+Math.random()*50}%;
+        animation-duration:${10+Math.random()*6}s;animation-delay:${Math.random()*5}s`;
+      layer.appendChild(ff);
+    }
+  }
+}
+
+/* ========== 🎧 Hybrid Audio System ========== */
+// استراتيجية: جرّب الإنترنت أولاً → إن فشل استخدم المولّد → بدّل تلقائياً عند تغير الطقس
+
+let audioCtx = null;
+let soundNodes = [];        // عقد Web Audio النشطة
+let onlineAudios = [];      // عناصر <audio> من الإنترنت
+let thunderTimer = null;
+let currentSoundKey = null;
+let currentSoundSource = 'none';   // 'online' | 'generated' | 'none'
+let soundPlaying = false;
+let masterVolume = 0.5;
+
+const ONLINE_SOUNDS = {
+  rain_light:  'https://actions.google.com/sounds/v1/weather/rain_light.ogg',
+  rain_heavy:  'https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg',
+  thunder:     'https://actions.google.com/sounds/v1/weather/thunder_crack.ogg',
+  thunderstorm:'https://actions.google.com/sounds/v1/weather/thunderstorm.ogg',
+  wind:        'https://actions.google.com/sounds/v1/weather/wind_whistling.ogg',
+  wind_strong: 'https://actions.google.com/sounds/v1/weather/wind_howling.ogg',
+  birds:       'https://actions.google.com/sounds/v1/animals/birds_forest_ambience.ogg',
+  crickets:    'https://actions.google.com/sounds/v1/animals/crickets_chirping.ogg'
+};
+
+const SOUND_LABELS = {
+  rain_light: 'مطر خفيف', rain_heavy: 'مطر غزير',
+  thunderstorm: 'عاصفة رعدية', snow: 'ثلج',
+  birds: 'طيور', crickets: 'ليل', wind: 'ريح'
+};
+
+/* ---------- Web Audio: توليد محلي ---------- */
+function getAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { console.warn('Web Audio غير مدعوم:', e); return null; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  return audioCtx;
+}
+
+function makeNoiseBuffer(ctx, type) {
+  const len = 2 * ctx.sampleRate;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  if (type === 'brown') {
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      data[i] = (last + 0.02 * w) / 1.02;
+      last = data[i];
+      data[i] *= 3.5;
+    }
+  } else {
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return buf;
+}
+
+function createNoise(type, filterType, freq, q, vol) {
+  const ctx = getAudioCtx();
+  if (!ctx) return null;
+  const src = ctx.createBufferSource();
+  src.buffer = makeNoiseBuffer(ctx, type);
+  src.loop = true;
+  const filter = ctx.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.value = freq;
+  filter.Q.value = q || 0.7;
+  const gain = ctx.createGain();
+  gain.gain.value = vol * masterVolume;
+  src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  src.start();
+  const node = { src, gain, _baseVolume: vol };
+  soundNodes.push(node);
+  return node;
+}
+
+function addLFO(node, freq, depth) {
+  const ctx = getAudioCtx();
+  if (!ctx || !node) return;
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = freq;
+  const lg = ctx.createGain();
+  lg.gain.value = depth;
+  lfo.connect(lg); lg.connect(node.gain.gain);
+  lfo.start();
+  node._lfo = lfo;
+}
+
+function genRain(heavy) {
+  const n = createNoise('white', 'lowpass', heavy ? 4500 : 3000, 0.5, heavy ? 0.32 : 0.18);
+  if (n) addLFO(n, 0.15, 0.05);
+}
+function genWind(strong) {
+  const n = createNoise('brown', 'lowpass', strong ? 800 : 500, 1.5, strong ? 0.38 : 0.22);
+  if (n) addLFO(n, 0.12, strong ? 0.15 : 0.08);
+}
+function genThunder() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const src = ctx.createBufferSource();
+  src.buffer = makeNoiseBuffer(ctx, 'brown');
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass'; filter.frequency.value = 400;
+  const gain = ctx.createGain();
+  const t = ctx.currentTime;
+  const peak = (0.6 + Math.random() * 0.3) * masterVolume;
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(peak, t + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+  src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  src.start(t); src.stop(t + 2);
+}
+function genBirds() {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  const loop = () => {
+    if (!soundPlaying || currentSoundSource !== 'generated') return;
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    const base = 2000 + Math.random() * 1500;
+    const t = ctx.currentTime;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.9, t + 0.15);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.07 * masterVolume, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(t + 0.2);
+    setTimeout(loop, 700 + Math.random() * 2500);
+  };
+  setTimeout(loop, 500);
+  genWind(false);
+}
+function genCrickets() {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  const loop = () => {
+    if (!soundPlaying || currentSoundSource !== 'generated') return;
+    for (let k = 0; k < 3; k++) {
+      setTimeout(() => {
+        if (!soundPlaying || currentSoundSource !== 'generated') return;
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = 4300;
+        const t = ctx.currentTime;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.035 * masterVolume, t + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(t + 0.08);
+      }, k * 60);
+    }
+    setTimeout(loop, 900 + Math.random() * 600);
+  };
+  setTimeout(loop, 300);
+  genWind(false);
+}
+
+function playGeneratedSound(key) {
+  currentSoundSource = 'generated';
+  switch (key) {
+    case 'thunderstorm':
+      genWind(true); genRain(true); genThunder();
+      thunderTimer = setInterval(() => {
+        if (!soundPlaying || currentSoundSource !== 'generated') {
+          clearInterval(thunderTimer); thunderTimer = null; return;
+        }
+        genThunder();
+      }, 8000 + Math.random() * 8000);
+      break;
+    case 'rain_heavy': genRain(true); genWind(true); break;
+    case 'rain_light': genRain(false); genWind(false); break;
+    case 'snow':       genWind(false); break;
+    case 'birds':      genBirds(); break;
+    case 'crickets':   genCrickets(); break;
+    case 'wind':
+    default:           genWind(false); break;
+  }
+}
+
+/* ---------- صوت الإنترنت (Google) ---------- */
+function tryOnlineSound(key, volume = 1, loop = true, timeoutMs = 5000) {
+  return new Promise(resolve => {
+    const url = ONLINE_SOUNDS[key];
+    if (!url) return resolve(null);
+
+    const audio = new Audio();
+    // لا نضع crossOrigin — يسمح بالتشغيل حتى بدون ترويسات CORS
+    audio.src = url;
+    audio.loop = loop;
+    audio.volume = Math.min(1, volume * masterVolume);
+    audio.preload = 'auto';
+    audio._baseVolume = volume;
+    audio._key = key;
+
+    let done = false;
+    const finish = ok => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      if (ok) {
+        onlineAudios.push(audio);
+        resolve(audio);
+      } else {
+        try { audio.pause(); audio.src = ''; } catch(e) {}
+        resolve(null);
+      }
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    audio.addEventListener('canplay', () => {
+      audio.play().then(() => finish(true)).catch(() => finish(false));
+    }, { once: true });
+    audio.addEventListener('error', () => finish(false), { once: true });
+    audio.load();
+  });
+}
+
+/* ---------- الموزّع الرئيسي ---------- */
+async function playWeatherSound(code) {
+  if (!soundPlaying) return;
+  stopAllSounds();
+  if (!soundPlaying) return;
+
+  const isRain    = [51,53,55,61,63,65,80,81,82].includes(code);
+  const isHeavy   = [82,95,96,99].includes(code);
+  const isThunder = [95,96,99].includes(code);
+  const isSnow    = [71,73,75,77,85,86].includes(code);
+  const isClear   = [0,1].includes(code);
+  const isNight   = isNightHour();
+
+  let mainKey;
+  if (isThunder) mainKey = 'thunderstorm';
+  else if (isHeavy) mainKey = 'rain_heavy';
+  else if (isRain) mainKey = 'rain_light';
+  else if (isSnow) mainKey = 'wind';
+  else if (isClear && !isNight) mainKey = 'birds';
+  else if (isClear && isNight) mainKey = 'crickets';
+  else mainKey = 'wind';
+
+  currentSoundKey = mainKey;
+  updateSoundInfo(mainKey, null); // "جاري..."
+
+  let usedOnline = false;
+
+  if (audioSourceMode !== 'generated') {
+    const primary = await tryOnlineSound(mainKey, 0.75, true);
+    if (primary && soundPlaying) {
+      usedOnline = true;
+      currentSoundSource = 'online';
+
+      if (isThunder) {
+        await tryOnlineSound('rain_heavy', 0.45, true);
+        const loopThunder = async () => {
+          if (!soundPlaying || currentSoundSource !== 'online') return;
+          await tryOnlineSound('thunder', 0.9, false, 4000);
+          thunderTimer = setTimeout(loopThunder, 8000 + Math.random() * 8000);
+        };
+        thunderTimer = setTimeout(loopThunder, 3000);
+      } else if (isRain && !isHeavy) {
+        await tryOnlineSound('wind', 0.25, true);
+      } else if (isClear && !isNight) {
+        await tryOnlineSound('wind', 0.15, true);
+      }
+    }
+  }
+
+  if (!usedOnline && audioSourceMode !== 'online') {
+    playGeneratedSound(mainKey);
+  } else if (!usedOnline && audioSourceMode === 'online') {
+    currentSoundSource = 'none';
+    showToast(ICONS.alert + ' تعذر تحميل صوت الإنترنت');
+  }
+
+  updateSoundInfo(mainKey, usedOnline);
+}
+
+/* ---------- إيقاف وتنظيف ---------- */
+function stopAllSounds() {
+  onlineAudios.forEach(a => { try { a.pause(); a.src = ''; } catch(e) {} });
+  onlineAudios = [];
+  soundNodes.forEach(n => {
+    try { n.src && n.src.stop(); } catch(e) {}
+    try { n._lfo && n._lfo.stop(); } catch(e) {}
+  });
+  soundNodes = [];
+  if (thunderTimer) { clearTimeout(thunderTimer); thunderTimer = null; }
+  currentSoundSource = 'none';
+}
+
+/* ---------- مستوى الصوت ---------- */
+function setVolume(v) {
+  masterVolume = Math.max(0, Math.min(1, v / 100));
+  const vol = $('volume'); if (vol) vol.value = v;
+  const sv = $('setVol');  if (sv)  sv.value = v;
+  const vv = $('volVal');  if (vv)  vv.textContent = v + '%';
+
+  onlineAudios.forEach(a => {
+    if (a._baseVolume != null) a.volume = Math.min(1, a._baseVolume * masterVolume);
+  });
+  if (audioCtx) {
+    const now = audioCtx.currentTime;
+    soundNodes.forEach(n => {
+      if (n.gain && n._baseVolume != null) {
+        n.gain.gain.setTargetAtTime(n._baseVolume * masterVolume, now, 0.05);
+      }
+    });
+  }
+}
+
+/* ---------- تحديث واجهة المصدر ---------- */
+function updateSoundInfo(key, usedOnline) {
+  const info = $('soundInfo');
+  if (!info) return;
+  const name = SOUND_LABELS[key] || 'صوت';
+  if (usedOnline === null) {
+    info.innerHTML = `${name}<br><span style="opacity:.6">جاري...</span>`;
+  } else if (usedOnline) {
+    info.innerHTML = `${name}<br><span style="color:#4ade80;font-size:9px">🌐 إنترنت</span>`;
+  } else {
+    info.innerHTML = `${name}<br><span style="color:#a78bfa;font-size:9px">🎛️ محلي</span>`;
+  }
+}
+
+/* ---------- زر التشغيل / الإيقاف ---------- */
+function toggleSound() {
+  const btn = $('soundBtn');
+  if (!soundPlaying) {
+    soundPlaying = true;
+    btn.innerHTML = ICONS.sound;
+    btn.classList.add('playing');
+    playWeatherSound(currentCode);
+    showToast(ICONS.sound + ' تم تشغيل أصوات الطقس');
+  } else {
+    soundPlaying = false;
+    stopAllSounds();
+    btn.innerHTML = ICONS.soundOff;
+    btn.classList.remove('playing');
+    const info = $('soundInfo');
+    if (info) info.textContent = 'صوت الطقس';
+    showToast(ICONS.soundOff + ' تم إيقاف الصوت');
+  }
+}
+
+/* ---------- تبديل وضع المصدر ---------- */
+function setAudioSourceMode(mode) {
+  audioSourceMode = mode;
+  settings.audioSourceMode = mode;
+  persistSettings();
+  showToast(ICONS.sound + ' وضع الصوت: ' + (
+    mode === 'auto' ? 'تلقائي' :
+    mode === 'online' ? 'إنترنت فقط' : 'محلي فقط'
+  ));
+  if (soundPlaying) playWeatherSound(currentCode);
+}
+
+/* ========== NEWS ========== */
+function gNewsUrl(query) {
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ar&gl=IQ&ceid=IQ:ar`;
+}
+const NEWS_QUERIES = [
+  { q: 'الطقس العراق', src: 'أخبار الطقس' },
+  { q: 'أمطار العراق', src: 'أمطار' },
+  { q: 'هيئة الأنواء الجوية', src: 'الأنواء' },
+  { q: 'ثلوج', src: 'ثلوج' },
+  { q: 'فيضانات', src: 'فيضانات' },
+  { q: 'موجة حارة', src: 'حرارة' }
+];
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+];
+const URGENT_KEYWORDS = ['عاجل','تحذير','إنذار','انذار','خطر','فيضان','عاصفة','إخلاء','طوارئ','وفاة','إصابات','كارثة','انهيار'];
+
+function isUrgent(title) {
+  return URGENT_KEYWORDS.some(k => title.includes(k));
+}
+
+async function fetchRSS(feedUrl) {
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    try {
+      const proxyURL = CORS_PROXIES[i](feedUrl);
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 12000);
+      const res = await fetch(proxyURL, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) continue;
+      let text = await res.text();
+
+      if (i === 0) {
+        try {
+          const j = JSON.parse(text);
+          if (j.contents) text = j.contents;
+        } catch(e) {}
+      }
+
+      const doc = new DOMParser().parseFromString(text, 'text/xml');
+      const items = [...doc.querySelectorAll('item')].slice(0, 6);
+      if (!items.length) continue;
+
+      const parsed = items.map(item => {
+        let title = (item.querySelector('title')?.textContent || '').trim();
+        const link = (item.querySelector('link')?.textContent || '').trim();
+        title = title.replace(/\s-\s[^-]+$/, '').trim();
+        return { title, link };
+      }).filter(n => n.title && n.link);
+
+      if (parsed.length) return parsed;
+    } catch (e) {}
+  }
+  return [];
+}
+
+async function loadNews(forceRender = false) {
+  if (!settings.news) return;
+  const track = $('tickerTrack');
+  if (!track) return;
+
+  if (!newsCache.length || forceRender) {
+    track.innerHTML = '<span class="ticker-loading">جاري تحميل الأخبار...</span>';
+  }
+
+  const results = await Promise.allSettled(NEWS_QUERIES.map(q => fetchRSS(gNewsUrl(q.q))));
+
+  const allNews = [];
+  results.forEach((r, idx) => {
+    if (r.status === 'fulfilled' && r.value.length) {
+      r.value.forEach(n => allNews.push({ ...n, source: NEWS_QUERIES[idx].src }));
+    }
+  });
+
+  if (!allNews.length) {
+    track.innerHTML = '<span class="ticker-loading">لا تتوفر أخبار حالياً — سيتم التحديث تلقائياً</span>';
+    return;
+  }
+
+  const seen = new Set();
+  const unique = [];
+  for (const n of allNews) {
+    const key = n.title.slice(0, 40);
+    if (!seen.has(key)) { seen.add(key); unique.push(n); }
+  }
+
+  for (let i = unique.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unique[i], unique[j]] = [unique[j], unique[i]];
+  }
+
+  newsCache = unique.slice(0, 30);
+  renderTicker();
+  refreshNewsSections();
+
+  if (settings.urgentNotify && SUPPORTS_NOTIF && Notification.permission === 'granted') {
+    const urgent = newsCache.filter(n => isUrgent(n.title));
+    if (urgent.length) {
+      const lastNotified = localStorage.getItem('lastUrgentNews') || '';
+      const title = urgent[0].title;
+      if (title !== lastNotified) {
+        try {
+          new Notification('خبر عاجل', { body: title, silent: false });
+          localStorage.setItem('lastUrgentNews', title);
+        } catch(e) {}
+      }
+    }
+  }
+}
+
+function renderTicker() {
+  const track = $('tickerTrack');
+  if (!track || !newsCache.length) return;
+
+  const items = newsCache.map(n => `
+    <a class="ticker-item" href="${escapeHtml(n.link)}" target="_blank" rel="noopener">
+      ${isUrgent(n.title) ? '<span style="color:#fca5a5;font-weight:700">عاجل:</span>' : ''}
+      <span>${escapeHtml(n.title)}</span>
+      <span class="sep">•</span>
+      <span style="opacity:0.6;font-size:11px">${escapeHtml(n.source || '')}</span>
+    </a>
+  `).join('<span class="sep">|</span>');
+
+  track.innerHTML = items;
+  track.style.animation = 'none';
+  void track.offsetWidth;
+  track.style.animation = `tickerMove ${newsSpeed}s linear infinite`;
+}
+
+function getDisplayedNews() {
+  let list = onlySavedNews ? savedNews : newsCache;
+  if (newsFilter.trim()) {
+    const q = newsFilter.trim().toLowerCase();
+    list = list.filter(n => n.title.toLowerCase().includes(q));
+  }
+  return list.slice(0, 15);
+}
+
+function setNewsFilter(v) {
+  newsFilter = v;
+  const list = $('newsList');
+  if (list) list.innerHTML = buildNewsListHTML();
+}
+
+function toggleOnlySavedNews() {
+  onlySavedNews = !onlySavedNews;
+  refreshNewsSections();
+  const btn = document.querySelector('.news-tools button');
+  if (btn) btn.classList.toggle('active', onlySavedNews);
+}
+
+function toggleSaveNewsByLink(btn) {
+  const link = btn.dataset.link;
+  if (!link) return;
+  const existingIdx = savedNews.findIndex(s => s.link === link);
+  if (existingIdx >= 0) {
+    savedNews.splice(existingIdx, 1);
+    showToast(ICONS.trash + ' تم إزالة الخبر من المحفوظة');
+  } else {
+    const n = newsCache.find(x => x.link === link);
+    if (!n) return;
+    savedNews.push({ title: n.title, link: n.link, source: n.source });
+    showToast(ICONS.bookmarkFill + ' تم حفظ الخبر');
+  }
+  localStorage.setItem('weatherSavedNews', JSON.stringify(savedNews));
+  refreshNewsSections();
+}
+
+function removeSavedNews(i) {
+  savedNews.splice(i, 1);
+  localStorage.setItem('weatherSavedNews', JSON.stringify(savedNews));
+  showToast(ICONS.trash + ' تم الحذف');
+  refreshNewsSections();
+}
+
+function setNewsSpeed(v) {
+  newsSpeed = parseInt(v, 10) || 20;
+  settings.newsSpeed = newsSpeed;
+  persistSettings();
+  renderTicker();
+  showToast(ICONS.timer + ' تم تغيير سرعة الشريط');
+}
+
+/* ========== Settings ========== */
+function openSettings() {
+  $('settingsOverlay').classList.add('open');
+  syncSettingsUI();
+}
+function closeSettings() { $('settingsOverlay').classList.remove('open'); }
+
+function syncSettingsUI() {
+  ['photos','dark','particles','kenburns','notify','auto','news','urgentNotify'].forEach(k => {
+    const el = $('sw-' + k);
+    if (!el) return;
+    el.classList.toggle('on', !!settings[k]);
+  });
+  const setUnitEl = $('setUnit');
+  if (setUnitEl) setUnitEl.value = unit;
+  const setWindEl = $('setWind');
+  if (setWindEl) setWindEl.value = windUnit;
+  const setSpeed = $('setNewsSpeed');
+  if (setSpeed) setSpeed.value = newsSpeed;
+  const setAS = $('setAudioSource');
+  if (setAS) setAS.value = audioSourceMode;
+}
+
+function toggleSetting(key) {
+  settings[key] = !settings[key];
+  persistSettings();
+  const el = $('sw-' + key);
+  if (el) el.classList.toggle('on', settings[key]);
+
+  switch (key) {
+    case 'photos': {
+      if (settings.photos) {
+        currentPhotoKey = '';
+        if (lastData) applyPhoto(lastData.current.weather_code, lastData.current.is_day === 1);
+      } else {
+        $('bgPhoto').classList.remove('active');
+        $('bgPhoto').style.backgroundImage = '';
+        currentPhotoKey = '';
+      }
+      break;
+    }
+    case 'dark': {
+      document.body.classList.toggle('light-mode', settings.dark);
+      $('modeBtn').innerHTML = settings.dark ? ICONS.sun : ICONS.moon;
+      break;
+    }
+    case 'particles': {
+      if (lastData) applyParticles(lastData.current.weather_code, lastData.current.is_day === 1);
+      break;
+    }
+    case 'kenburns': {
+      const photo = $('bgPhoto');
+      if (settings.kenburns && !IS_MOBILE) photo.classList.add('kenburns');
+      else photo.classList.remove('kenburns');
+      break;
+    }
+    case 'auto': {
+      if (autoUpdateTimer) { clearInterval(autoUpdateTimer); autoUpdateTimer = null; }
+      if (settings.auto) {
+        autoUpdateTimer = setInterval(() => {
+          if (lastCoords) loadByCoords(lastCoords.lat, lastCoords.lon, lastCity);
+        }, 10 * 60 * 1000);
+      }
+      break;
+    }
+    case 'notify': {
+      if (settings.notify) enableNotify();
+      break;
+    }
+    case 'news': {
+      const ticker = $('newsTicker');
+      if (settings.news) {
+        ticker.style.display = '';
+        loadNews();
+      } else {
+        ticker.style.display = 'none';
+      }
+      break;
+    }
+    case 'urgentNotify': {
+      if (settings.urgentNotify && SUPPORTS_NOTIF && Notification.permission !== 'granted') {
+        enableNotify();
+      }
+      break;
+    }
+  }
+}
+
+function switchUnitTo(v) {
+  unit = v;
+  settings.unit = v;
+  persistSettings();
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+  showToast(ICONS.thermometer + ' تم التغيير إلى °' + unit);
+}
+function setWindUnit(v) {
+  windUnit = v;
+  settings.windUnit = v;
+  persistSettings();
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+  showToast(ICONS.wind + ' تم تغيير وحدة الريح');
+}
+function switchUnit() {
+  unit = unit === 'C' ? 'F' : 'C';
+  settings.unit = unit;
+  persistSettings();
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+  showToast(ICONS.thermometer + ' تم التحويل إلى °' + unit);
+}
+
+function resetSettings() {
+  if (!confirm('هل أنت متأكد من إعادة تعيين كل الإعدادات؟')) return;
+  settings = {
+    photos: true, dark: false, particles: true, kenburns: true,
+    notify: false, auto: true, news: true, urgentNotify: true,
+    unit: 'C', windUnit: 'kmh', newsSpeed: 20, audioSourceMode: 'auto'
+  };
+  persistSettings();
+  unit = 'C'; windUnit = 'kmh'; newsSpeed = 20; audioSourceMode = 'auto';
+  document.body.classList.remove('light-mode');
+  $('modeBtn').innerHTML = ICONS.moon;
+  currentPhotoKey = '';
+  newsFilter = '';
+  onlySavedNews = false;
+  syncSettingsUI();
+  if (lastCoords) loadByCoords(lastCoords.lat, lastCoords.lon, lastCity);
+  showToast(ICONS.check + ' تم إعادة التعيين');
+}
+
+/* ========== About ========== */
+function openAbout() {
+  $('drawer').classList.add('open');
+  $('drawerOverlay').classList.add('open');
+}
+function closeAbout() {
+  $('drawer').classList.remove('open');
+  $('drawerOverlay').classList.remove('open');
+}
+
+/* ========== Features ========== */
+function toggleMode() {
+  settings.dark = !settings.dark;
+  document.body.classList.toggle('light-mode', settings.dark);
+  $('modeBtn').innerHTML = settings.dark ? ICONS.sun : ICONS.moon;
+  persistSettings();
+  const el = $('sw-dark');
+  if (el) el.classList.toggle('on', settings.dark);
+}
+
+function addFav() {
+  if (!lastCoords || !lastCity) return;
+  if (favorites.some(f => f.name === lastCity)) { showToast(ICONS.info + ' المدينة موجودة بالمفضلة'); return; }
+  if (favorites.length >= 8) { showToast(ICONS.alert + ' الحد الأقصى 8 مدن'); return; }
+  favorites.push({ name: lastCity, lat: lastCoords.lat, lon: lastCoords.lon });
+  localStorage.setItem('weatherFavs', JSON.stringify(favorites));
+  showToast(ICONS.starFill + ' أضيفت للمفضلة');
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+}
+
+function removeFav(i) {
+  favorites.splice(i, 1);
+  localStorage.setItem('weatherFavs', JSON.stringify(favorites));
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+}
+
+function loadFav(i) {
+  const f = favorites[i];
+  if (f) loadByCoords(f.lat, f.lon, f.name);
+}
+
+function addCompare() {
+  if (!lastCoords || !lastCity) return;
+  if (compareList.some(c => c.name === lastCity)) { showToast(ICONS.info + ' موجودة في المقارنة'); return; }
+  if (compareList.length >= 4) { showToast(ICONS.alert + ' الحد الأقصى 4 مدن للمقارنة'); return; }
+  compareList.push({
+    name: lastCity, lat: lastCoords.lat, lon: lastCoords.lon,
+    temp: currentTemp, code: currentCode
+  });
+  localStorage.setItem('weatherCompare', JSON.stringify(compareList));
+  showToast(ICONS.plus + ' أضيفت للمقارنة');
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+}
+
+function removeCompare(i) {
+  compareList.splice(i, 1);
+  localStorage.setItem('weatherCompare', JSON.stringify(compareList));
+  if (lastData) renderWeather(lastData, lastCity, lastAqiData);
+}
+
+function shareWeather() {
+  const w = decodeWeather(currentCode, currentIsDay);
+  const text = `الطقس في ${lastCity}: ${Math.round(currentTemp)}°C — ${w.desc}\nNOOBR™ Weather`;
+  if (navigator.share) {
+    navigator.share({ title: 'NOOBR™ Weather', text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showToast(ICONS.check + ' تم النسخ')).catch(() => showToast(ICONS.alert + ' تعذر النسخ'));
+  } else {
+    showToast(ICONS.alert + ' المتصفح ما يدعم المشاركة');
+  }
+}
+
+function enableNotify() {
+  if (!SUPPORTS_NOTIF) { showToast(ICONS.alert + ' المتصفح ما يدعم الإشعارات'); return; }
+  Notification.requestPermission().then(p => {
+    if (p === 'granted') {
+      showToast(ICONS.bell + ' سيصلك تنبيه عند تغير الطقس');
+      settings.notify = true;
+    } else {
+      showToast(ICONS.alert + ' تم رفض الإشعارات');
+      settings.notify = false;
+      const el = $('sw-notify');
+      if (el) el.classList.remove('on');
+    }
+    persistSettings();
+  });
+}
+
+function checkAndNotify(newCode) {
+  if (!settings.notify || !SUPPORTS_NOTIF || Notification.permission !== 'granted') return;
+  const old = parseInt(localStorage.getItem('lastCode') || '0', 10);
+  if (old !== 0 && old !== newCode && newCode) {
+    const w = decodeWeather(newCode, !isNightHour());
+    try { new Notification('تغير الطقس', { body: `الآن: ${w.desc}`, silent: true }); } catch(e){}
+  }
+  localStorage.setItem('lastCode', String(newCode));
+}
+
+/* ========== Detail Modal ========== */
+function showDetail(title, text) {
+  $('detailTitle').textContent = title;
+  $('detailText').textContent = text;
+  $('detailModal').classList.add('open');
+}
+function closeDetail() { $('detailModal').classList.remove('open'); }
+
+/* ========== Cleanup ========== */
+function cleanupAll() {
+  if (autoUpdateTimer) { clearInterval(autoUpdateTimer); autoUpdateTimer = null; }
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  if (lightningTimer) { clearTimeout(lightningTimer); lightningTimer = null; }
+  if (newsTimer) { clearInterval(newsTimer); newsTimer = null; }
+  stopAllSounds();
+}
+
+/* ========== Init ========== */
+window.addEventListener('load', () => {
+  if (settings.dark) {
+    document.body.classList.add('light-mode');
+    $('modeBtn').innerHTML = ICONS.sun;
+  }
+
+  syncSettingsUI();
+  setVolume(50);
+  useMyLocation();
+  loadNews();
+
+  if (settings.auto) {
+    autoUpdateTimer = setInterval(() => {
+      if (lastCoords) loadByCoords(lastCoords.lat, lastCoords.lon, lastCity);
+    }, 10 * 60 * 1000);
+  }
+
+  newsTimer = setInterval(() => loadNews(), 15 * 60 * 1000);
+
+  clockTimer = setInterval(() => {
+    const clock = $('liveClock');
+    if (clock) {
+      const now = new Date();
+      clock.innerHTML = ICONS.clock.replace('class="ico"','class="ico ico-sm"') + ' ' +
+        now.toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit', second:'2-digit' })
+        + ' — ' + now.toLocaleDateString('ar-EG', { weekday:'long', day:'numeric', month:'long' });
+    }
+  }, 1000);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeSettings(); closeAbout(); closeDetail(); }
+  });
+
+  window.addEventListener('beforeunload', cleanupAll);
+  window.addEventListener('pagehide', cleanupAll);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopAllSounds();
+    } else if (soundPlaying) {
+      playWeatherSound(currentCode);
+    }
+  });
+});
+</script>
+</body>
+</html>
